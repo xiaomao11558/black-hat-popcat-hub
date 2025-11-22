@@ -20,8 +20,8 @@ local originalShadowEnabled = game.Lighting.GlobalShadows
 -- 创建主窗口
 local window = library:new("POPCAT-黑帽-菜单")
 
--- 1. 移动与跳跃专区（原有代码不变）
-local MovementTab = window:Tab("移动跳跃", "7733774602")
+-- 1. 通用专区（原有代码不变）
+local MovementTab = window:Tab("通用", "7733774602")
 local MovementSection = MovementTab:section("核心移动控制", true)
 
 MovementSection:Label("💨 速度与跳跃调整")
@@ -92,6 +92,236 @@ MovementSection:Button("启用隐身", function()
     pcall(function()
         loadstring(game:HttpGet('https://pastebin.com/raw/3Rnd9rHf'))()
         warn("隐身功能已启用！")
+    end)
+end)
+
+-- ESP
+MovementSection:Label("👁️ 透视功能")
+MovementSection:Button("加载透视脚本 (open source)", function()
+    pcall(function()
+        -- 服务引用
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local Player = Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
+
+-- 全局ESP开关状态
+local isESPEnabled = true
+
+-- 创建ESP容器GUI
+local ESPGui = Instance.new("ScreenGui")
+ESPGui.Name = "PlayerESP"
+ESPGui.Parent = PlayerGui
+ESPGui.IgnoreGuiInset = true
+
+-- 开关按钮（右上角）
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Name = "ESPToggle"
+ToggleButton.Size = UDim2.new(0, 100, 0, 35)
+ToggleButton.Position = UDim2.new(0.95, -100, 0.02, 0)
+ToggleButton.BackgroundColor3 = Color3.new(0.15, 0.15, 0.15)
+ToggleButton.Text = "关闭ESP"
+ToggleButton.TextColor3 = Color3.new(1,1,1)
+ToggleButton.Font = Enum.Font.GothamBold
+ToggleButton.TextSize = 14
+ToggleButton.BorderSizePixel = 1
+ToggleButton.BorderColor3 = Color3.new(0.5, 0.5, 0.5)
+ToggleButton.AutoButtonColor = true
+ToggleButton.Parent = ESPGui
+
+-- 按钮点击事件
+ToggleButton.MouseButton1Click:Connect(function()
+    isESPEnabled = not isESPEnabled
+    ToggleButton.Text = isESPEnabled and "关闭ESP" or "开启ESP"
+    for _, playerESP in pairs(ESPGui:GetChildren()) do
+        if playerESP:IsA("Frame") then
+            playerESP.Visible = isESPEnabled
+        end
+    end
+end)
+
+-- 存储每个玩家的ESP元素
+local PlayerESPData = {}
+
+-- 团队颜色检测（优先读取TeamColor，无则默认白色）
+local function getTeamColor(targetPlayer)
+    if targetPlayer.Team ~= nil then
+        return targetPlayer.TeamColor.Color
+    end
+    return Color3.new(1,1,1) -- 默认白色
+end
+
+-- 创建单个玩家的ESP元素（50x70尺寸+细框+极细血条+团队颜色）
+local function createPlayerESP(targetPlayer)
+    if targetPlayer == Player then return end
+
+    -- ESP主容器（调整为50x70）
+    local ESPFrame = Instance.new("Frame")
+    ESPFrame.Name = targetPlayer.Name .. "_ESP"
+    ESPFrame.Size = UDim2.new(0, 50, 0, 70) -- 方框尺寸50x70
+    ESPFrame.BackgroundTransparency = 1
+    ESPFrame.Parent = ESPGui
+    ESPFrame.Visible = isESPEnabled
+
+    -- 方框（变细：边框1像素→0.5视觉效果）
+    local MainBox = Instance.new("Frame")
+    MainBox.Size = UDim2.new(1, 0, 1, 0)
+    MainBox.BackgroundColor3 = Color3.new(0,0,0)
+    MainBox.BackgroundTransparency = 0.9
+    MainBox.BorderSizePixel = 1 -- 边框粗细1像素（更细）
+    MainBox.BorderColor3 = getTeamColor(targetPlayer) -- 团队颜色
+    MainBox.Parent = ESPFrame
+
+    -- 名字标签（居中+团队颜色）
+    local NameLabel = Instance.new("TextLabel")
+    NameLabel.Size = UDim2.new(1, 0, 0, 16)
+    NameLabel.Position = UDim2.new(0, 0, -0.25, 0)
+    NameLabel.BackgroundTransparency = 1
+    NameLabel.Text = targetPlayer.Name
+    NameLabel.TextColor3 = getTeamColor(targetPlayer) -- 名字随团队颜色
+    NameLabel.Font = Enum.Font.Gotham
+    NameLabel.TextSize = 11
+    NameLabel.TextStrokeTransparency = 0.7
+    NameLabel.TextStrokeColor3 = Color3.new(0,0,0)
+    NameLabel.TextXAlignment = Enum.TextXAlignment.Center
+    NameLabel.Parent = ESPFrame
+
+    -- 血条（极细：宽度3%）
+    local HealthBarContainer = Instance.new("Frame")
+    HealthBarContainer.Size = UDim2.new(0.03, 0, 1, 0) -- 宽度缩至3%（极细）
+    HealthBarContainer.Position = UDim2.new(-0.1, 0, 0, 0)
+    HealthBarContainer.BackgroundColor3 = Color3.new(0.1,0.1,0.1)
+    HealthBarContainer.BorderSizePixel = 1
+    HealthBarContainer.BorderColor3 = Color3.new(0.4,0.4,0.4)
+    HealthBarContainer.Parent = ESPFrame
+
+    local HealthBar = Instance.new("Frame")
+    HealthBar.Size = UDim2.new(1, 0, 1, 0)
+    HealthBar.BackgroundColor3 = Color3.new(0,0.9,0)
+    HealthBar.BorderSizePixel = 0
+    HealthBar.Parent = HealthBarContainer
+
+    -- 距离标签（居中）
+    local DistanceLabel = Instance.new("TextLabel")
+    DistanceLabel.Size = UDim2.new(1, 0, 0, 14)
+    DistanceLabel.Position = UDim2.new(0, 0, 1.15, 0)
+    DistanceLabel.BackgroundTransparency = 1
+    DistanceLabel.Text = "距离: 0"
+    DistanceLabel.TextColor3 = Color3.new(0.9,0.9,0.9)
+    DistanceLabel.Font = Enum.Font.Gotham
+    DistanceLabel.TextSize = 9
+    DistanceLabel.TextStrokeTransparency = 0.7
+    DistanceLabel.TextStrokeColor3 = Color3.new(0,0,0)
+    DistanceLabel.TextXAlignment = Enum.TextXAlignment.Center
+    DistanceLabel.Parent = ESPFrame
+
+    -- 存储数据
+    PlayerESPData[targetPlayer] = {
+        Frame = ESPFrame,
+        MainBox = MainBox, -- 存储方框用于更新团队颜色
+        NameLabel = NameLabel, -- 存储名字标签用于更新颜色
+        HealthBar = HealthBar,
+        DistanceLabel = DistanceLabel,
+        Humanoid = nil,
+        Torso = nil
+    }
+
+    -- 监听角色加载
+    local function onCharacterAdded(character)
+        local Humanoid = character:WaitForChild("Humanoid")
+        local Torso = character:WaitForChild("HumanoidRootPart")
+        PlayerESPData[targetPlayer].Humanoid = Humanoid
+        PlayerESPData[targetPlayer].Torso = Torso
+
+        -- 血条更新
+        Humanoid.HealthChanged:Connect(function()
+            local healthRatio = Humanoid.Health / Humanoid.MaxHealth
+            TweenService:Create(
+                HealthBar,
+                TweenInfo.new(0.2),
+                {Size = UDim2.new(1, 0, healthRatio, 0)}
+            ):Play()
+            -- 血条颜色渐变
+            local barColor = healthRatio > 0.5 and Color3.new(0,0.9,0) or (healthRatio > 0.2 and Color3.new(1,0.7,0) or Color3.new(0.9,0,0))
+            HealthBar.BackgroundColor3 = barColor
+        end)
+    end
+
+    -- 监听团队变更（实时更新颜色）
+    targetPlayer:GetPropertyChangedSignal("Team"):Connect(function()
+        local teamColor = getTeamColor(targetPlayer)
+        PlayerESPData[targetPlayer].MainBox.BorderColor3 = teamColor
+        PlayerESPData[targetPlayer].NameLabel.TextColor3 = teamColor
+    end)
+
+    if targetPlayer.Character then
+        onCharacterAdded(targetPlayer.Character)
+    end
+    targetPlayer.CharacterAdded:Connect(onCharacterAdded)
+end
+
+-- 移除玩家的ESP元素
+local function removePlayerESP(targetPlayer)
+    if PlayerESPData[targetPlayer] then
+        PlayerESPData[targetPlayer].Frame:Destroy()
+        PlayerESPData[targetPlayer] = nil
+    end
+end
+
+-- 初始化现有玩家
+for _, targetPlayer in pairs(Players:GetPlayers()) do
+    createPlayerESP(targetPlayer)
+end
+
+-- 监听新玩家加入
+Players.PlayerAdded:Connect(createPlayerESP)
+
+-- 监听玩家离开
+Players.PlayerRemoving:Connect(removePlayerESP)
+
+-- 实时更新ESP（保持下移60像素）
+RunService.RenderStepped:Connect(function()
+    if not isESPEnabled then return end
+
+    local LocalCharacter = Player.Character
+    if not LocalCharacter or not LocalCharacter:FindFirstChild("HumanoidRootPart") then return end
+    local LocalPosition = LocalCharacter.HumanoidRootPart.Position
+
+    for targetPlayer, data in pairs(PlayerESPData) do
+        local TargetTorso = data.Torso
+        if not TargetTorso or not targetPlayer.Character then
+            data.Frame.Visible = false
+            continue
+        end
+
+        -- 躯干位置转屏幕坐标 + 下移60像素
+        local TargetPosition = TargetTorso.Position
+        local ScreenPosition, onScreen = workspace.CurrentCamera:WorldToScreenPoint(TargetPosition)
+        data.Frame.Visible = onScreen
+
+        if onScreen then
+            -- 居中+下移60像素
+            data.Frame.Position = UDim2.new(
+                0, ScreenPosition.X - (data.Frame.AbsoluteSize.X / 2),
+                0, ScreenPosition.Y - (data.Frame.AbsoluteSize.Y / 2) + 60
+            )
+
+            -- 更新距离
+            local Distance = (LocalPosition - TargetPosition).Magnitude
+            data.DistanceLabel.Text = string.format("距离: %.0f", Distance)
+
+            -- 同步血条状态
+            if data.Humanoid then
+                local healthRatio = data.Humanoid.Health / data.Humanoid.MaxHealth
+                data.HealthBar.Size = UDim2.new(1, 0, healthRatio, 0)
+                local barColor = healthRatio > 0.5 and Color3.new(0,0.9,0) or (healthRatio > 0.2 and Color3.new(1,0.7,0) or Color3.new(0.9,0,0))
+                data.HealthBar.BackgroundColor3 = barColor
+            end
+        end
+    end
+end)
+        warn("透视脚本加载成功！")
     end)
 end)
 
