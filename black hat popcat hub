@@ -497,6 +497,31 @@ TeleportSection:Dropdown("传送到指定玩家", "选择目标玩家", playerLi
     end
 end)
 
+-- 新增：刷新玩家列表功能
+TeleportSection:Button("刷新玩家列表", function()
+    playerList = {} -- 清空原有列表
+    for _, plr in pairs(game.Players:GetPlayers()) do
+        if plr ~= game.Players.LocalPlayer then -- 排除本地玩家
+            table.insert(playerList, plr.Name)
+        end
+    end
+    -- 重新创建下拉菜单（先销毁旧菜单，避免重复）
+    local oldDropdown = TeleportSection:FindFirstChild("传送到指定玩家_Dropdown")
+    if oldDropdown then
+        oldDropdown:Destroy()
+    end
+    -- 重建更新后的下拉菜单
+    TeleportSection:Dropdown("传送到指定玩家", "选择目标玩家", playerList, function(s)
+        local targetPlr = game.Players:FindFirstChild(s)
+        if targetPlr and targetPlr.Character and targetPlr.Character:FindFirstChild("HumanoidRootPart") then
+            game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = targetPlr.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 5)
+        else
+            warn("目标玩家未加载或不存在！")
+        end
+    end)
+    warn("玩家列表已刷新，当前在线玩家数：" .. #playerList)
+end)
+
 -- 新增：传送至高处
 TeleportSection:Button("传送至100高度", function()
     if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
@@ -584,6 +609,46 @@ UtilitySection:Dropdown("角色颜色", "更改角色颜色", { "红色", "蓝�
     end
 end)
 
+-- 新增：无头模式（无头+清除脸部贴图，支持恢复）
+local originalFaceTexture = nil -- 存储原始脸部贴图，用于恢复
+UtilitySection:Toggle("无头模式", "隐藏头部+清除脸部贴图（支持恢复）", false, function(state)
+    local character = game.Players.LocalPlayer.Character
+    if not character then
+        warn("角色未加载，无法启用功能！")
+        return
+    end
+
+    -- 1. 处理头部显示（无头效果）
+    local head = character:FindFirstChild("Head")
+    if not head then
+        warn("未找到角色头部，不兼容当前模型！")
+        return
+    end
+
+    if state then
+        -- 开启：隐藏头部+删除脸部贴图
+        head.Transparency = 1 -- 无头效果
+        -- 存储原始脸部贴图（仅首次开启时保存）
+        if not originalFaceTexture then
+            originalFaceTexture = head:FindFirstChildOfClass("Decal") -- 查找脸部贴图
+        end
+        -- 删除脸部贴图（若存在）
+        local face = head:FindFirstChildOfClass("Decal")
+        if face then
+            face:Destroy()
+        end
+        warn("脸部重置恢复已启用！头部隐藏+脸部贴图清除")
+    else
+        -- 关闭：恢复头部显示+还原脸部贴图
+        head.Transparency = 0 -- 恢复头部显示
+        -- 还原原始脸部贴图（若之前有保存）
+        if originalFaceTexture and not head:FindFirstChildOfClass("Decal") then
+            originalFaceTexture:Clone().Parent = head
+        end
+        warn("脸部重置恢复已关闭！头部+脸部贴图恢复默认")
+    end
+end)
+
 -- 新增：除雾功能
 UtilitySection:Toggle("去除雾气", "清除游戏内所有雾气", false, function(state)
     fogDisabled = state
@@ -668,6 +733,6 @@ end)
 
 -- 菜单底部信息
 local InfoSection = UtilityTab:section("菜单信息", false)
-InfoSection:Label("📌 黑帽菜单 v1.4")
+InfoSection:Label("📌 黑帽菜单 v1.6")
 InfoSection:Label("✅ 持续更新可用功能 | 4大专区")
 InfoSection:Label("😻 关注黑帽猫猫获取更多功能情报")
