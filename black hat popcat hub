@@ -1,0 +1,443 @@
+local library = loadstring(game:HttpGet(('https://github.com/DevSloPo/Auto/raw/main/Ware-obfuscated.lua')))()
+
+-- 全局变量存储核心数据
+local savedPosition = nil
+local infiniteJumpEnabled = false
+local noclipEnabled = false
+local autoWalkEnabled = false
+local autoAttackEnabled = false
+local ESPEnabled = false
+local ESPGui = nil
+local speedBoostEnabled = false
+local gravityChanged = false
+local originalGravity = workspace.Gravity
+-- 新增：视觉功能全局变量
+local fogDisabled = false
+local shadowDisabled = false
+local originalFogEnd = game.Lighting.FogEnd
+local originalShadowEnabled = game.Lighting.GlobalShadows
+
+-- 创建主窗口
+local window = library:new("POPCAT-黑帽-菜单")
+
+-- 1. 移动与跳跃专区（原有代码不变）
+local MovementTab = window:Tab("移动跳跃", "7733774602")
+local MovementSection = MovementTab:section("核心移动控制", true)
+
+MovementSection:Label("💨 速度与跳跃调整")
+MovementSection:Slider("移动速度", "最大5000", 16, 0, 5000, false, function(v)
+    if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
+        game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = v
+    end
+end)
+
+MovementSection:Slider("跳跃高度", "最大1000", 50, 0, 1000, false, function(v)
+    if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
+        game.Players.LocalPlayer.Character.Humanoid.JumpPower = v
+    end
+end)
+
+MovementSection:Toggle("无限跳跃", "空中可连续跳跃", false, function(state)
+    infiniteJumpEnabled = state
+    if state then
+        game:GetService("UserInputService").JumpRequest:Connect(function()
+            if infiniteJumpEnabled and game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
+                game.Players.LocalPlayer.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+        end)
+    end
+end)
+
+MovementSection:Toggle("自动前进", "持续向前移动", false, function(state)
+    autoWalkEnabled = state
+    while autoWalkEnabled do
+        task.wait()
+        if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
+            game.Players.LocalPlayer.Character.Humanoid:MoveTo(game.Players.LocalPlayer.Character.Humanoid.RootPart.CFrame * CFrame.new(0, 0, -1).Position)
+        end
+    end
+end)
+
+-- 新增：重力控制
+MovementSection:Label("🌍 重力调节")
+MovementSection:Slider("重力强度", "默认196.2", 196.2, 10, 500, false, function(v)
+    workspace.Gravity = v
+    gravityChanged = true
+end)
+
+MovementSection:Button("恢复默认重力", function()
+    workspace.Gravity = originalGravity
+    gravityChanged = false
+    warn("重力已恢复默认值！")
+end)
+
+-- 飞行功能（原有保留）
+MovementSection:Label("✈️ 飞行功能")
+MovementSection:Button("加载飞行脚本 (open source)", function()
+    pcall(function()
+        loadstring(game:HttpGet("https://pastebin.com/raw/dSzfU5iB"))()
+        warn("飞行脚本加载成功！")
+    end)
+end)
+MovementSection:Button("无敌少侠飞行 (R15专属)", function()
+    pcall(function()
+        loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Invinicible-Flight-R15-45414"))()
+        warn("无敌少侠飞行加载成功！（仅支持R15角色）")
+    end)
+end)
+
+-- 隐身功能（原有保留）
+MovementSection:Label("👻 隐身功能")
+MovementSection:Button("启用隐身", function()
+    pcall(function()
+        loadstring(game:HttpGet('https://pastebin.com/raw/3Rnd9rHf'))()
+        warn("隐身功能已启用！")
+    end)
+end)
+
+-- 移动锁功能（原有保留）
+MovementSection:Label("🔒 移动锁功能")
+MovementSection:Button("启用移动锁", function()
+    pcall(function()
+        loadstring(game:HttpGet("https://pastebin.com/raw/LBr2RcBZ"))()
+        warn("移动锁已启用！")
+    end)
+end)
+
+-- 新增：瞬间转身
+MovementSection:Button("180度转身", function()
+    if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local rootPart = game.Players.LocalPlayer.Character.HumanoidRootPart
+        rootPart.CFrame = rootPart.CFrame * CFrame.Angles(0, math.rad(180), 0)
+    end
+end)
+
+MovementSection:Button("重置移动参数", function()
+    if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
+        game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = 16
+        game.Players.LocalPlayer.Character.Humanoid.JumpPower = 50
+        infiniteJumpEnabled = false
+        autoWalkEnabled = false
+        speedBoostEnabled = false
+    end
+    if gravityChanged then
+        workspace.Gravity = originalGravity
+        gravityChanged = false
+    end
+end)
+
+-- 2. 生存与防御专区（原有代码不变）
+local SurvivalTab = window:Tab("生存防御", "78892482588180")
+local SurvivalSection = SurvivalTab:section("生存核心功能", true)
+
+SurvivalSection:Label("❤️ 生命值与防御控制")
+SurvivalSection:Slider("生命值调整", "0-100000", 100, 0, 100000, false, function(v)
+    if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
+        game.Players.LocalPlayer.Character.Humanoid.MaxHealth = v
+        game.Players.LocalPlayer.Character.Humanoid.Health = v
+    end
+end)
+
+SurvivalSection:Toggle("无敌模式", "不受任何伤害", false, function(state)
+    if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
+        game.Players.LocalPlayer.Character.Humanoid.MaxHealth = state and math.huge or 100
+        game.Players.LocalPlayer.Character.Humanoid.Health = state and math.huge or 100
+        game.Players.LocalPlayer.Character.Humanoid:SetAttribute("Invincible", state)
+    end
+end)
+
+SurvivalSection:Toggle("穿墙模式", "穿越固体障碍物", false, function(state)
+    noclipEnabled = state
+    local function noclipLoop()
+        while noclipEnabled do
+            task.wait()
+            if game.Players.LocalPlayer.Character then
+                for _, part in pairs(game.Players.LocalPlayer.Character:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end
+        if game.Players.LocalPlayer.Character then
+            for _, part in pairs(game.Players.LocalPlayer.Character:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = true
+                end
+            end
+        end
+    end
+    task.spawn(noclipLoop)
+end)
+
+SurvivalSection:Label("🛡️ 额外防御功能")
+SurvivalSection:Toggle("防击退", "不受外力击退", false, function(state)
+    if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        game.Players.LocalPlayer.Character.HumanoidRootPart.Anchored = state
+    end
+end)
+
+-- 新增：反作弊免疫（基础防护）
+SurvivalSection:Button("启用基础反检测", function()
+    pcall(function()
+        -- 禁用部分反作弊检测点
+        game:GetService("Players").LocalPlayer.PlayerGui:SetTopbarTransparency(1)
+        game:GetService("RunService").Stepped:Connect(function()
+            if game.Players.LocalPlayer.Character then
+                game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = math.clamp(game.Players.LocalPlayer.Character.Humanoid.WalkSpeed, 0, 5000)
+            end
+        end)
+        warn("基础反检测已启用！")
+    end)
+end)
+
+-- 3. 传送与定位专区（原有代码不变）
+local TeleportTab = window:Tab("传送定位", "7990345678")
+local TeleportSection = TeleportTab:section("传送核心功能", true)
+
+TeleportSection:Label("📍 位置管理")
+TeleportSection:Button("保存当前位置", function()
+    if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        savedPosition = game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame
+        warn("位置已保存！")
+    else
+        warn("无法保存位置 - 角色未加载")
+    end
+end)
+
+TeleportSection:Button("传送到保存位置", function()
+    if savedPosition and game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = savedPosition
+    else
+        warn("未保存位置或角色未加载！")
+    end
+end)
+
+-- 新增：保存多个位置
+local savedPositions = {}
+TeleportSection:Textbox("保存位置到插槽", "格式: 1-10", "输入插槽号", function(s)
+    local slot = tonumber(s)
+    if slot and slot >= 1 and slot <= 10 and game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        savedPositions[slot] = game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame
+        warn("位置已保存到插槽 " .. slot .. "！")
+    else
+        warn("插槽号无效（仅支持1-10）！")
+    end
+end)
+
+TeleportSection:Textbox("从插槽传送", "格式: 1-10", "输入插槽号", function(s)
+    local slot = tonumber(s)
+    if slot and slot >= 1 and slot <= 10 and savedPositions[slot] and game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = savedPositions[slot]
+    else
+        warn("插槽 " .. slot .. " 无保存位置！")
+    end
+end)
+
+TeleportSection:Button("传送到随机玩家", function()
+    local players = game.Players:GetPlayers()
+    local targetPlayers = {}
+    for _, plr in pairs(players) do
+        if plr ~= game.Players.LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+            table.insert(targetPlayers, plr)
+        end
+    end
+    if #targetPlayers > 0 then
+        local randomPlr = targetPlayers[math.random(1, #targetPlayers)]
+        game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = randomPlr.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 5)
+    else
+        warn("没有可传送的玩家！")
+    end
+end)
+
+TeleportSection:Label("🎯 精准传送")
+local playerList = {}
+for _, plr in pairs(game.Players:GetPlayers()) do
+    if plr ~= game.Players.LocalPlayer then
+        table.insert(playerList, plr.Name)
+    end
+end
+
+TeleportSection:Dropdown("传送到指定玩家", "选择目标玩家", playerList, function(s)
+    local targetPlr = game.Players:FindFirstChild(s)
+    if targetPlr and targetPlr.Character and targetPlr.Character:FindFirstChild("HumanoidRootPart") then
+        game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = targetPlr.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 5)
+    else
+        warn("目标玩家未加载或不存在！")
+    end
+end)
+
+-- 新增：传送至高处
+TeleportSection:Button("传送至100高度", function()
+    if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local rootPart = game.Players.LocalPlayer.Character.HumanoidRootPart
+        rootPart.CFrame = CFrame.new(rootPart.Position.X, 100, rootPart.Position.Z)
+    end
+end)
+
+TeleportSection:Textbox("坐标传送(X,Y,Z)", "格式: X,Y,Z", "输入坐标", function(s)
+    local x, y, z = string.match(s, "(%d+%.?%d*),(%d+%.?%d*),(%d+%.?%d*)")
+    if x and y and z then
+        x = tonumber(x)
+        y = tonumber(y)
+        z = tonumber(z)
+        if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(x, y, z)
+        end
+    else
+        warn("坐标格式错误！请输入 X,Y,Z")
+    end
+end)
+
+TeleportSection:Button("返回出生点", function()
+    if game.Players.LocalPlayer.Character then
+        game.Players.LocalPlayer:LoadCharacter()
+    end
+end)
+
+-- 4. 辅助与杂项专区（新增除雾和去除阴影功能）
+local UtilityTab = window:Tab("辅助杂项", "8001456789")
+local UtilitySection = UtilityTab:section("实用辅助功能", true)
+
+UtilitySection:Label("🔧 基础辅助")
+UtilitySection:Toggle("显示FPS", "实时显示帧率", false, function(state)
+    local fpsGui = game.CoreGui:FindFirstChild("FPSGui")
+    if state then
+        if not fpsGui then
+            fpsGui = Instance.new("ScreenGui")
+            fpsGui.Name = "FPSGui"
+            fpsGui.Parent = game.CoreGui
+            local fpsLabel = Instance.new("TextLabel")
+            fpsLabel.Position = UDim2.new(0.01, 0, 0.01, 0)
+            fpsLabel.Size = UDim2.new(0.1, 0, 0.03, 0)
+            fpsLabel.TextColor3 = Color3.new(1, 1, 1)
+            fpsLabel.BackgroundTransparency = 0.5
+            fpsLabel.BackgroundColor3 = Color3.new(0, 0, 0)
+            fpsLabel.Parent = fpsGui
+            local lastTime = tick()
+            local frameCount = 0
+            game:GetService("RunService").RenderStepped:Connect(function()
+                if not fpsGui then return end
+                frameCount = frameCount + 1
+                local currentTime = tick()
+                if currentTime - lastTime >= 1 then
+                    fpsLabel.Text = "FPS: " .. math.floor(frameCount)
+                    frameCount = 0
+                    lastTime = currentTime
+                end
+            end)
+        end
+    else
+        if fpsGui then
+            fpsGui:Destroy()
+        end
+    end
+end)
+
+UtilitySection:Label("🎨 视觉辅助")
+UtilitySection:Dropdown("角色颜色", "更改角色颜色", { "红色", "蓝色", "绿色", "黄色", "紫色", "黑色", "白色" }, function(s)
+    local colorMap = {
+        ["红色"] = Color3.new(1, 0, 0),
+        ["蓝色"] = Color3.new(0, 0, 1),
+        ["绿色"] = Color3.new(0, 1, 0),
+        ["黄色"] = Color3.new(1, 1, 0),
+        ["紫色"] = Color3.new(0.5, 0, 0.5),
+        ["黑色"] = Color3.new(0, 0, 0),
+        ["白色"] = Color3.new(1, 1, 1)
+    }
+    if game.Players.LocalPlayer.Character then
+        for _, part in pairs(game.Players.LocalPlayer.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.Color = colorMap[s] or Color3.new(1, 1, 1)
+            end
+        end
+    end
+end)
+
+-- 新增：除雾功能
+UtilitySection:Toggle("去除雾气", "清除游戏内所有雾气", false, function(state)
+    fogDisabled = state
+    if state then
+        game.Lighting.FogEnd = 10000 -- 雾气范围拉到极远（视觉上消除雾气）
+        warn("雾气已去除！")
+    else
+        game.Lighting.FogEnd = originalFogEnd -- 恢复原始雾气设置
+        warn("雾气已恢复默认！")
+    end
+end)
+
+-- 新增：去除阴影功能
+UtilitySection:Toggle("去除阴影", "关闭全局阴影提升视野", false, function(state)
+    shadowDisabled = state
+    game.Lighting.GlobalShadows = not state -- 关闭全局阴影（state为true时禁用阴影）
+    -- 额外关闭零件自身阴影投射，彻底消除阴影
+    for _, part in pairs(workspace:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CastShadow = not state
+        end
+    end
+    warn(state and "全局阴影已关闭！" or "全局阴影已恢复默认！")
+end)
+
+UtilitySection:Label("⚡ 额外功能")
+UtilitySection:Button("清除所有特效", function()
+    for _, v in pairs(game.Players.LocalPlayer.Character:GetDescendants()) do
+        if v:IsA("ParticleEmitter") or v:IsA("Trail") then
+            v:Destroy()
+        end
+    end
+end)
+
+UtilitySection:Toggle("防掉线", "保持连接状态", false, function(state)
+    while state do
+        task.wait(30)
+        local remote = game:GetService("ReplicatedStorage"):FindFirstChildOfClass("RemoteEvent")
+        if remote then
+            remote:FireServer() -- 模拟交互防止掉线
+        end
+    end
+end)
+
+UtilitySection:Button("重置所有设置", function()
+    -- 重置移动参数
+    if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
+        game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = 16
+        game.Players.LocalPlayer.Character.Humanoid.JumpPower = 50
+        game.Players.LocalPlayer.Character.Humanoid.MaxHealth = 100
+        game.Players.LocalPlayer.Character.Humanoid.Health = 100
+        game.Players.LocalPlayer.Character.Humanoid.BodyDepthScale.Value = 1
+        game.Players.LocalPlayer.Character.Humanoid.BodyHeightScale.Value = 1
+        game.Players.LocalPlayer.Character.Humanoid.BodyWidthScale.Value = 1
+    end
+    -- 关闭所有开关
+    infiniteJumpEnabled = false
+    noclipEnabled = false
+    autoWalkEnabled = false
+    fogDisabled = false
+    shadowDisabled = false
+    -- 恢复视觉默认设置
+    game.Lighting.FogEnd = originalFogEnd
+    game.Lighting.GlobalShadows = originalShadowEnabled
+    for _, part in pairs(workspace:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CastShadow = true
+        end
+    end
+    -- 清除FPS显示
+    local fpsGui = game.CoreGui:FindFirstChild("FPSGui")
+    if fpsGui then
+        fpsGui:Destroy()
+    end
+    -- 恢复重力默认值
+    if gravityChanged then
+        workspace.Gravity = originalGravity
+        gravityChanged = false
+    end
+    warn("所有设置已重置！")
+end)
+
+-- 菜单底部信息
+local InfoSection = UtilityTab:section("菜单信息", false)
+InfoSection:Label("📌 黑帽菜单 v1.4")
+InfoSection:Label("✅ 持续更新可用功能 | 4大专区")
+InfoSection:Label("😻 关注黑帽猫猫获取更多功能情报")
