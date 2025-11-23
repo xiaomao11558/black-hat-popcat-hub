@@ -421,6 +421,358 @@ SurvivalSection:Button("启用基础反检测", function()
     end)
 end)
 
+-- 5. 自瞄专区（新增头部锁定+默认头部）
+local AimTab = window:Tab("自瞄功能", "8112567890")
+local AimSection = AimTab:section("精准自瞄控制", true)
+
+-- 自瞄核心变量（默认锁定部位改为头部）
+local aimEnabled = false
+local aimSmoothness = 5 -- 默认平滑度
+local crosshairRange = 100 -- 十字准心判定范围（像素）
+local targetLockMode = "Head" -- 默认锁头部
+local currentTarget = nil
+local maxAimDistance = 500 -- 默认最大锁定距离（ studs ）
+
+-- 创建十字准心GUI
+local crosshairGui = Instance.new("ScreenGui")
+crosshairGui.Name = "AimCrosshair"
+crosshairGui.Parent = game.Players.LocalPlayer.PlayerGui
+crosshairGui.IgnoreGuiInset = true
+
+-- 十字准心绘制（简单十字线，居中显示）
+local function createCrosshair()
+    -- 横向线
+    local horizontalLine = Instance.new("Frame")
+    horizontalLine.Size = UDim2.new(0, crosshairRange, 0, 2)
+    horizontalLine.Position = UDim2.new(0.5, -crosshairRange/2, 0.5, 0)
+    horizontalLine.BackgroundColor3 = Color3.new(1, 0, 0)
+    horizontalLine.BackgroundTransparency = 0.3
+    horizontalLine.Parent = crosshairGui
+
+    -- 纵向线
+    local verticalLine = Instance.new("Frame")
+    verticalLine.Size = UDim2.new(0, 2, 0, crosshairRange)
+    verticalLine.Position = UDim2.new(0.5, 0, 0.5, -crosshairRange/2)
+    verticalLine.BackgroundColor3 = Color3.new(1, 0, 0)
+    verticalLine.BackgroundTransparency = 0.3
+    verticalLine.Parent = crosshairGui
+
+    -- 中心点
+    local centerDot = Instance.new("Frame")
+    centerDot.Size = UDim2.new(0, 4, 0, 4)
+    centerDot.Position = UDim2.new(0.5, -2, 0.5, -2)
+    centerDot.BackgroundColor3 = Color3.new(1, 0, 0)
+    centerDot.BackgroundTransparency = 0.1
+    centerDot.Parent = crosshairGui
+end
+createCrosshair()
+
+-- 获取准心范围内+最大距离内的最近目标（支持头部/身体锁定）
+local function getNearestTarget()
+    local localPlayer = game.Players.LocalPlayer
+    local localChar = localPlayer.Character
+    if not localChar or not localChar:FindFirstChild("HumanoidRootPart") then return nil end
+
+    local nearestTarget = nil
+    local nearestDistance = math.huge
+    local camera = workspace.CurrentCamera
+
+    -- 遍历所有玩家
+    for _, player in pairs(game.Players:GetPlayers()) do
+        if player ~= localPlayer and player.Character and player.Character.Humanoid.Health > 0 then
+            -- 根据锁定模式获取目标部位（优先头部，无则 fallback 到身体）
+            local targetPart = nil
+            if targetLockMode == "Head" then
+                targetPart = player.Character:FindFirstChild("Head")
+            elseif targetLockMode == "Body" then
+                targetPart = player.Character:FindFirstChild("HumanoidRootPart")
+            end
+
+            -- 目标部位不存在则跳过（防止角色加载异常）
+            if not targetPart then continue end
+
+            -- 1. 先检测三维空间距离是否在最大范围内
+            local actualDistance = (localChar.HumanoidRootPart.Position - targetPart.Position).Magnitude
+            if actualDistance > maxAimDistance then continue end -- 超出最大距离直接跳过
+
+            -- 2. 再检测是否在准心范围内
+            local screenPos = camera:WorldToScreenPoint(targetPart.Position)
+            local distanceFromCrosshair = math.sqrt(
+                math.pow(screenPos.X - game:GetService("GuiService"):GetGuiInset().X - game:GetService("CoreGui").RobloxGui.AbsoluteSize.X/2, 2) +
+                math.pow(screenPos.Y - game:GetService("GuiService"):GetGuiInset().Y - game:GetService("CoreGui").RobloxGui.AbsoluteSize.Y/2, 2)
+            )
+
+            if distanceFromCrosshair <= crosshairRange then
+                -- 3. 筛选最近目标
+                if actualDistance < nearestDistance then
+                    nearestDistance = actualDistance
+                    nearestTarget = targetPart
+                end
+            end
+        end
+    end
+    return nearestTarget
+end
+
+-- 自瞄主循环
+game:GetService("RunService").RenderStepped:Connect(function()
+    if not aimEnabled then return end
+
+    local localPlayer = game.Players.LocalPlayer
+    local localChar = localPlayer.Character
+    local camera = workspace.CurrentCamera
+
+    if not localChar or not localChar:FindFirstChild("HumanoidRootPart") then return end
+
+    -- 更新最近目标
+    currentTarget = getNearestTarget()
+
+    -- 对准目标（平滑跟随）
+    if currentTarget then
+        local targetCFrame = CFrame.new(camera.CFrame.Position, currentTarget.Position)
+        -- 平滑插值计算
+        camera.CFrame = camera.CFrame:Lerp(targetCFrame, 1 / aimSmoothness)
+    end
+end)
+
+-- 自瞄功能控件（新增头部选项，默认选中头部）
+AimSection:Label("🎯 自瞄核心设置")
+AimSection:Toggle("启用自瞄", "仅锁定准心范围内+最大距离内目标", false, function(state)
+    aimEnabled = state
+    crosshairGui.Visible = state -- 启用时显示十字准心，关闭时隐藏
+end)
+
+AimSection:Slider("自瞄平滑度", "数值越大越平滑（1-20）", 5, 1, 20, false, function(v)
+    aimSmoothness = v
+end)
+
+AimSection:Slider("准心判定范围", "像素值（50-300）", 100, 50, 300, false, function(v)
+    crosshairRange = v
+    -- 实时更新十字准心大小
+    crosshairGui:ClearAllChildren()
+    createCrosshair()
+end)
+
+AimSection:Slider("最大锁定距离", " studs 单位（100-2000）", 500, 100, 2000, false, function(v)
+    maxAimDistance = v
+end)
+
+AimSection:Label("🔍 锁定模式（默认头部）")
+AimSection:Dropdown("锁定部位", "选择要锁定的身体部位", { "头部", "身体" }, function(s)
+    targetLockMode = s == "头部" and "Head" or "Body"
+end)
+
+AimSection:Button("重置自瞄设置", function()
+    aimEnabled = false
+    aimSmoothness = 5
+    crosshairRange = 100
+    maxAimDistance = 500
+    targetLockMode = "Head" -- 重置后仍默认头部
+    currentTarget = nil
+    crosshairGui.Visible = false
+    -- 恢复十字准心默认大小
+    crosshairGui:ClearAllChildren()
+    createCrosshair()
+end)
+
+-- 5. 碰撞箱增强专区（新增）
+local HitboxTab = window:Tab("范围", "8112567890")
+local HitboxSection = HitboxTab:section("碰撞箱核心功能", true)
+ 
+-- 全局变量存储碰撞箱数据
+local hitboxEnabled = false
+local hitboxSize = 10 -- 默认碰撞箱大小
+local originalHitboxes = {} -- 存储原始碰撞箱数据
+local originalCanCollide = {} -- 存储原始碰撞状态
+local renderSteppedConnection = nil -- 自动刷新连接
+local characterCache = {} -- 角色缓存，减少重复查找
+ 
+-- 创建可视化碰撞箱（红色正方形、透明度50%、贴合躯干、无卡顿）
+local function createVisualHitbox(character)
+-- 优先获取躯干部件（适配R15/R6）
+local torso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
+if not torso then return end
+ 
+-- 复用现有可视化碰撞箱（避免重复创建销毁，减少卡顿）
+local visualHitbox = character:FindFirstChild("VisualHitbox")
+if not visualHitbox then
+visualHitbox = Instance.new("Part")
+visualHitbox.Name = "VisualHitbox"
+visualHitbox.Anchored = false
+visualHitbox.CanCollide = false
+visualHitbox.Transparency = 0.5 -- 保持可见，透明度50%
+visualHitbox.BrickColor = BrickColor.Red()
+visualHitbox.Material = Enum.Material.Plastic -- 低消耗材质
+visualHitbox.Parent = character
+ 
+-- 一次性创建约束（复用不重建）
+local weld = Instance.new("WeldConstraint")
+weld.Name = "HitboxWeld"
+weld.Part0 = torso
+weld.Part1 = visualHitbox
+weld.Parent = visualHitbox
+end
+ 
+-- 仅更新必要属性（减少渲染开销）
+visualHitbox.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
+visualHitbox.Position = torso.Position
+visualHitbox.Visible = true -- 强制保持可见，避免不可见问题
+end
+ 
+-- 应用碰撞箱设置（单个角色，轻量执行）
+local function applyHitboxToCharacter(character)
+if not hitboxEnabled or not character or characterCache[character] == "processing" then return end
+characterCache[character] = "processing" -- 防止并发执行
+ 
+-- 优先获取核心部件（缓存常用部件，减少查找开销）
+local torso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
+local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+if not torso or not humanoidRootPart then
+characterCache[character] = nil
+return
+end
+ 
+-- 保存原始数据（仅首次保存，避免重复操作）
+if not originalHitboxes[character] then
+originalHitboxes[character] = humanoidRootPart.Size
+end
+if not originalCanCollide[character] then
+originalCanCollide[character] = {}
+-- 仅记录核心躯干部件（减少数据量和遍历消耗）
+local keyParts = {torso.Name, "HumanoidRootPart", "Head"}
+for _, partName in pairs(keyParts) do
+local part = character:FindFirstChild(partName)
+if part and part:IsA("BasePart") then
+originalCanCollide[character][partName] = part.CanCollide
+end
+end
+end
+ 
+-- 仅更新变化的属性（减少引擎通信开销）
+if humanoidRootPart.Size ~= Vector3.new(hitboxSize, hitboxSize, hitboxSize) then
+humanoidRootPart.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
+end
+-- 设置核心部件不可碰撞（支持穿过）
+local keyParts = {torso.Name, "HumanoidRootPart", "Head"}
+for _, partName in pairs(keyParts) do
+local part = character:FindFirstChild(partName)
+if part and part:IsA("BasePart") and part.CanCollide then
+part.CanCollide = false
+end
+end
+ 
+-- 创建/更新可视化碰撞箱
+createVisualHitbox(character)
+characterCache[character] = nil
+end
+ 
+-- 恢复原始碰撞箱状态（单个角色）
+local function restoreCharacterHitbox(character)
+if characterCache[character] == "processing" then return end
+characterCache[character] = "processing"
+ 
+local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+if humanoidRootPart and originalHitboxes[character] then
+humanoidRootPart.Size = originalHitboxes[character]
+end
+-- 恢复碰撞状态
+if originalCanCollide[character] then
+for partName, canCollide in pairs(originalCanCollide[character]) do
+local part = character:FindFirstChild(partName)
+if part and part:IsA("BasePart") then
+part.CanCollide = canCollide
+end
+end
+originalCanCollide[character] = nil
+end
+-- 隐藏可视化碰撞箱（保留对象，避免重复创建）
+local visualHitbox = character:FindFirstChild("VisualHitbox")
+if visualHitbox then
+visualHitbox.Visible = false
+end
+originalHitboxes[character] = nil
+characterCache[character] = nil
+end
+ 
+-- 自动刷新碰撞箱（超低消耗，避免卡顿）
+local function startAutoRefresh()
+if renderSteppedConnection then return end
+-- 优化刷新频率：100ms一次（平衡流畅度和性能，比50ms更省资源）
+local refreshInterval = 0.1
+local lastRefreshTime = tick()
+renderSteppedConnection = game:GetService("RunService").RenderStepped:Connect(function()
+if not hitboxEnabled then return end
+local currentTime = tick()
+if currentTime - lastRefreshTime < refreshInterval then return end
+lastRefreshTime = currentTime
+ 
+-- 遍历所有其他玩家，轻量同步
+for _, player in pairs(game.Players:GetPlayers()) do
+if player ~= game.Players.LocalPlayer and player.Character then
+task.spawn(applyHitboxToCharacter, player.Character) -- 异步执行，避免阻塞
+end
+end
+end)
+end
+ 
+-- 停止自动刷新
+local function stopAutoRefresh()
+if renderSteppedConnection then
+renderSteppedConnection:Disconnect()
+renderSteppedConnection = nil
+end
+-- 清空缓存
+characterCache = {}
+end
+ 
+-- 监听新玩家加入和角色重生（自动适配）
+game.Players.PlayerAdded:Connect(function(player)
+if player == game.Players.LocalPlayer then return end
+player.CharacterAdded:Connect(function(character)
+task.wait(0.3) -- 缩短等待，快速响应
+if hitboxEnabled then
+task.spawn(applyHitboxToCharacter, character)
+end
+end)
+end)
+ 
+-- 碰撞箱功能开关
+HitboxSection:Toggle("启用碰撞箱增强", "对所有其他玩家生效，可穿过，无卡顿", false, function(state)
+hitboxEnabled = state
+if state then
+-- 启用时应用到所有现有玩家（异步执行，避免卡顿）
+for _, player in pairs(game.Players:GetPlayers()) do
+if player ~= game.Players.LocalPlayer and player.Character then
+task.spawn(applyHitboxToCharacter, player.Character)
+end
+end
+startAutoRefresh()
+warn("碰撞箱增强已启用！可穿过其他玩家，可视化保持可见")
+else
+-- 关闭时恢复所有玩家状态（异步执行）
+for _, player in pairs(game.Players:GetPlayers()) do
+if player ~= game.Players.LocalPlayer and player.Character then
+task.spawn(restoreCharacterHitbox, player.Character)
+end
+end
+stopAutoRefresh()
+warn("碰撞箱增强已关闭，恢复原始状态！")
+end
+end)
+ 
+-- 碰撞箱大小调节（最大100）
+HitboxSection:Slider("碰撞箱大小", "默认10，最大100", 10, 5, 100, false, function(v)
+hitboxSize = v
+-- 调节大小时异步同步，避免卡顿
+if hitboxEnabled then
+for _, player in pairs(game.Players:GetPlayers()) do
+if player ~= game.Players.LocalPlayer and player.Character then
+task.spawn(applyHitboxToCharacter, player.Character)
+end
+end
+end
+end)
+
 -- 3. 传送与定位专区（原有代码不变）
 local TeleportTab = window:Tab("传送定位", "7990345678")
 local TeleportSection = TeleportTab:section("传送核心功能", true)
@@ -495,31 +847,6 @@ TeleportSection:Dropdown("传送到指定玩家", "选择目标玩家", playerLi
     else
         warn("目标玩家未加载或不存在！")
     end
-end)
-
--- 新增：刷新玩家列表功能
-TeleportSection:Button("刷新玩家列表", function()
-    playerList = {} -- 清空原有列表
-    for _, plr in pairs(game.Players:GetPlayers()) do
-        if plr ~= game.Players.LocalPlayer then -- 排除本地玩家
-            table.insert(playerList, plr.Name)
-        end
-    end
-    -- 重新创建下拉菜单（先销毁旧菜单，避免重复）
-    local oldDropdown = TeleportSection:FindFirstChild("传送到指定玩家_Dropdown")
-    if oldDropdown then
-        oldDropdown:Destroy()
-    end
-    -- 重建更新后的下拉菜单
-    TeleportSection:Dropdown("传送到指定玩家", "选择目标玩家", playerList, function(s)
-        local targetPlr = game.Players:FindFirstChild(s)
-        if targetPlr and targetPlr.Character and targetPlr.Character:FindFirstChild("HumanoidRootPart") then
-            game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = targetPlr.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 5)
-        else
-            warn("目标玩家未加载或不存在！")
-        end
-    end)
-    warn("玩家列表已刷新，当前在线玩家数：" .. #playerList)
 end)
 
 -- 新增：传送至高处
@@ -609,46 +936,6 @@ UtilitySection:Dropdown("角色颜色", "更改角色颜色", { "红色", "蓝�
     end
 end)
 
--- 新增：无头模式（无头+清除脸部贴图，支持恢复）
-local originalFaceTexture = nil -- 存储原始脸部贴图，用于恢复
-UtilitySection:Toggle("无头模式", "隐藏头部+清除脸部贴图（支持恢复）", false, function(state)
-    local character = game.Players.LocalPlayer.Character
-    if not character then
-        warn("角色未加载，无法启用功能！")
-        return
-    end
-
-    -- 1. 处理头部显示（无头效果）
-    local head = character:FindFirstChild("Head")
-    if not head then
-        warn("未找到角色头部，不兼容当前模型！")
-        return
-    end
-
-    if state then
-        -- 开启：隐藏头部+删除脸部贴图
-        head.Transparency = 1 -- 无头效果
-        -- 存储原始脸部贴图（仅首次开启时保存）
-        if not originalFaceTexture then
-            originalFaceTexture = head:FindFirstChildOfClass("Decal") -- 查找脸部贴图
-        end
-        -- 删除脸部贴图（若存在）
-        local face = head:FindFirstChildOfClass("Decal")
-        if face then
-            face:Destroy()
-        end
-        warn("脸部重置恢复已启用！头部隐藏+脸部贴图清除")
-    else
-        -- 关闭：恢复头部显示+还原脸部贴图
-        head.Transparency = 0 -- 恢复头部显示
-        -- 还原原始脸部贴图（若之前有保存）
-        if originalFaceTexture and not head:FindFirstChildOfClass("Decal") then
-            originalFaceTexture:Clone().Parent = head
-        end
-        warn("脸部重置恢复已关闭！头部+脸部贴图恢复默认")
-    end
-end)
-
 -- 新增：除雾功能
 UtilitySection:Toggle("去除雾气", "清除游戏内所有雾气", false, function(state)
     fogDisabled = state
@@ -733,6 +1020,6 @@ end)
 
 -- 菜单底部信息
 local InfoSection = UtilityTab:section("菜单信息", false)
-InfoSection:Label("📌 黑帽菜单 v1.6")
+InfoSection:Label("📌 黑帽菜单 v1.4")
 InfoSection:Label("✅ 持续更新可用功能 | 4大专区")
 InfoSection:Label("😻 关注黑帽猫猫获取更多功能情报")
