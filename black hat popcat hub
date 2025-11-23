@@ -24,7 +24,7 @@ local window = library:new("POPCAT-黑帽-菜单")
 local MovementTab = window:Tab("通用", "7733774602")
 local MovementSection = MovementTab:section("核心移动控制", true)
 
-MovementSection:Label("💨 速度与跳跃调整")
+MovementSection:Label("速度与跳跃调整")
 MovementSection:Slider("移动速度", "最大5000", 16, 0, 5000, false, function(v)
     if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
         game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = v
@@ -59,7 +59,7 @@ MovementSection:Toggle("自动前进", "持续向前移动", false, function(sta
 end)
 
 -- 新增：重力控制
-MovementSection:Label("🌍 重力调节")
+MovementSection:Label("重力调节")
 MovementSection:Slider("重力强度", "默认196.2", 196.2, 10, 500, false, function(v)
     workspace.Gravity = v
     gravityChanged = true
@@ -72,7 +72,7 @@ MovementSection:Button("恢复默认重力", function()
 end)
 
 -- 飞行功能（原有保留）
-MovementSection:Label("✈️ 飞行功能")
+MovementSection:Label("飞行功能")
 MovementSection:Button("加载飞行脚本 (open source)", function()
     pcall(function()
         loadstring(game:HttpGet("https://pastebin.com/raw/dSzfU5iB"))()
@@ -87,7 +87,7 @@ MovementSection:Button("无敌少侠飞行 (R15专属)", function()
 end)
 
 -- 隐身功能（原有保留）
-MovementSection:Label("👻 隐身功能")
+MovementSection:Label("隐身功能")
 MovementSection:Button("启用隐身", function()
     pcall(function()
         loadstring(game:HttpGet('https://pastebin.com/raw/3Rnd9rHf'))()
@@ -96,7 +96,7 @@ MovementSection:Button("启用隐身", function()
 end)
 
 -- ESP
-MovementSection:Label("👁️ 透视功能")
+MovementSection:Label("透视功能")
 MovementSection:Button("加载透视脚本 (open source)", function()
     pcall(function()
         -- 服务引用
@@ -326,7 +326,7 @@ end)
 end)
 
 -- 移动锁功能（原有保留）
-MovementSection:Label("🔒 移动锁功能")
+MovementSection:Label("移动锁功能")
 MovementSection:Button("启用移动锁", function()
     pcall(function()
         loadstring(game:HttpGet("https://pastebin.com/raw/LBr2RcBZ"))()
@@ -360,7 +360,7 @@ end)
 local SurvivalTab = window:Tab("生存防御", "78892482588180")
 local SurvivalSection = SurvivalTab:section("生存核心功能", true)
 
-SurvivalSection:Label("❤️ 生命值与防御控制")
+SurvivalSection:Label("生命值与防御控制")
 SurvivalSection:Slider("生命值调整", "0-100000", 100, 0, 100000, false, function(v)
     if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
         game.Players.LocalPlayer.Character.Humanoid.MaxHealth = v
@@ -400,7 +400,7 @@ SurvivalSection:Toggle("穿墙模式", "穿越固体障碍物", false, function(
     task.spawn(noclipLoop)
 end)
 
-SurvivalSection:Label("🛡️ 额外防御功能")
+SurvivalSection:Label("额外防御功能")
 SurvivalSection:Toggle("防击退", "不受外力击退", false, function(state)
     if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
         game.Players.LocalPlayer.Character.HumanoidRootPart.Anchored = state
@@ -727,7 +727,7 @@ end)
 local ExternalScriptTab = window:Tab("其他脚本中心", "8223678901")
 local ExternalScriptSection = ExternalScriptTab:section("其他脚本加载", true)
  
-ExternalScriptSection:Label("🌐 其他脚本")
+ExternalScriptSection:Label("其他脚本")
 -- XK Hub 加载
 ExternalScriptSection:Button("加载 XK Hub", function()
 pcall(function()
@@ -763,17 +763,12 @@ loadstring(game:HttpGet(url))()
 warn("APT 脚本加载成功！")
 end)
 end)
- 
-ExternalScriptSection:Label("⚠️ 加载说明")
-ExternalScriptSection:Label("• 第三方脚本可能存在安全风险")
-ExternalScriptSection:Label("• 加载前请确保脚本来源可信")
-ExternalScriptSection:Label("• 若加载失败请检查网络或脚本链接有效性")
 
--- 4. 辅助与杂项专区（新增除雾和去除阴影功能）
+-- 4. 辅助与杂项专区
 local UtilityTab = window:Tab("辅助杂项", "8001456789")
 local UtilitySection = UtilityTab:section("实用辅助功能", true)
 
-UtilitySection:Label("🔧 基础辅助")
+UtilitySection:Label("基础辅助")
 UtilitySection:Toggle("显示FPS", "实时显示帧率", false, function(state)
     local fpsGui = game.CoreGui:FindFirstChild("FPSGui")
     if state then
@@ -808,7 +803,124 @@ UtilitySection:Toggle("显示FPS", "实时显示帧率", false, function(state)
     end
 end)
 
-UtilitySection:Label("🎨 视觉辅助")
+-- 新增：显示实时延迟
+UtilitySection:Toggle("显示延迟", "实时显示网络延迟(ms)", false, function(state)
+    local pingGui = game.CoreGui:FindFirstChild("PingGui")
+    if state then
+        if not pingGui then
+            pingGui = Instance.new("ScreenGui")
+            pingGui.Name = "PingGui"
+            pingGui.Parent = game.CoreGui
+            
+            local pingLabel = Instance.new("TextLabel")
+            pingLabel.Position = UDim2.new(0.01, 0, 0.05, 0) -- 位于FPS下方
+            pingLabel.Size = UDim2.new(0.12, 0, 0.03, 0)
+            pingLabel.TextColor3 = Color3.new(1, 1, 1)
+            pingLabel.BackgroundTransparency = 0.5
+            pingLabel.BackgroundColor3 = Color3.new(0, 0, 0)
+            pingLabel.Font = Enum.Font.Gotham
+            pingLabel.TextSize = 14
+            pingLabel.Parent = pingGui
+            
+            -- 实时更新延迟（每1秒获取一次）
+            game:GetService("RunService").Stepped:Connect(function()
+                if not pingGui then return end
+                local ping = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue()
+                pingLabel.Text = "延迟: " .. math.floor(ping) .. "ms"
+                
+                -- 延迟颜色提示（绿色<50ms，黄色50-150ms，红色>150ms）
+                if ping < 50 then
+                    pingLabel.TextColor3 = Color3.new(0, 1, 0)
+                elseif ping < 150 then
+                    pingLabel.TextColor3 = Color3.new(1, 1, 0)
+                else
+                    pingLabel.TextColor3 = Color3.new(1, 0, 0)
+                end
+            end)
+        end
+    else
+        if pingGui then
+            pingGui:Destroy()
+        end
+    end
+end)
+
+-- 新增：显示附近NPC数量
+UtilitySection:Toggle("显示附近NPC", "实时统计周围NPC数量", false, function(state)
+    local npcGui = game.CoreGui:FindFirstChild("NPCGui")
+    local npcUpdateConnection = nil -- 存储监听连接，方便关闭时断开
+    
+    if state then
+        if not npcGui then
+            npcGui = Instance.new("ScreenGui")
+            npcGui.Name = "NPCGui"
+            npcGui.Parent = game.CoreGui
+            
+            local npcLabel = Instance.new("TextLabel")
+            npcLabel.Position = UDim2.new(0.01, 0, 0.09, 0) -- 位于延迟下方
+            npcLabel.Size = UDim2.new(0.15, 0, 0.03, 0)
+            npcLabel.TextColor3 = Color3.new(1, 1, 1)
+            npcLabel.BackgroundTransparency = 0.5
+            npcLabel.BackgroundColor3 = Color3.new(0, 0, 0)
+            npcLabel.Font = Enum.Font.Gotham
+            npcLabel.TextSize = 14
+            npcLabel.Parent = npcGui
+            
+            -- 实时更新附近NPC数量（每0.5秒检测一次）
+            npcUpdateConnection = game:GetService("RunService").Stepped:Connect(function()
+                if not npcGui or not game.Players.LocalPlayer.Character then return end
+                
+                local localPlayerPos = game.Players.LocalPlayer.Character.HumanoidRootPart.Position
+                local npcCount = 0
+                local detectRadius = 200 -- 检测半径（可调整，单位： studs）
+                
+                -- 遍历所有模型，筛选NPC（包含Humanoid且非玩家角色）
+                for _, model in pairs(workspace:GetDescendants()) do
+                    if model:IsA("Model") and model:FindFirstChildOfClass("Humanoid") then
+                        -- 排除玩家角色
+                        local isPlayerCharacter = false
+                        for _, plr in pairs(game.Players:GetPlayers()) do
+                            if plr.Character == model then
+                                isPlayerCharacter = true
+                                break
+                            end
+                        end
+                        if not isPlayerCharacter then
+                            -- 计算距离，在检测半径内则计数
+                            local npcRootPart = model:FindFirstChild("HumanoidRootPart")
+                            if npcRootPart then
+                                local distance = (npcRootPart.Position - localPlayerPos).Magnitude
+                                if distance <= detectRadius then
+                                    npcCount = npcCount + 1
+                                end
+                            end
+                        end
+                    end
+                end
+                
+                npcLabel.Text = "附近NPC: " .. npcCount
+                -- 根据NPC数量调整颜色（0=灰色，1-5=蓝色，>5=橙色）
+                if npcCount == 0 then
+                    npcLabel.TextColor3 = Color3.new(0.7, 0.7, 0.7)
+                elseif npcCount <= 5 then
+                    npcLabel.TextColor3 = Color3.new(0, 0.8, 1)
+                else
+                    npcLabel.TextColor3 = Color3.new(1, 0.6, 0)
+                end
+            end)
+        end
+    else
+        -- 关闭时销毁UI并断开监听
+        if npcGui then
+            npcGui:Destroy()
+        end
+        if npcUpdateConnection then
+            npcUpdateConnection:Disconnect()
+        end
+    end
+end)
+
+UtilitySection:Label("视觉辅助")
 UtilitySection:Dropdown("角色颜色", "更改角色颜色", { "红色", "蓝色", "绿色", "黄色", "紫色", "黑色", "白色" }, function(s)
     local colorMap = {
         ["红色"] = Color3.new(1, 0, 0),
@@ -853,7 +965,7 @@ UtilitySection:Toggle("去除阴影", "关闭全局阴影提升视野", false, f
     warn(state and "全局阴影已关闭！" or "全局阴影已恢复默认！")
 end)
 
-UtilitySection:Label("⚡ 额外功能")
+UtilitySection:Label("额外功能")
 UtilitySection:Button("清除所有特效", function()
     for _, v in pairs(game.Players.LocalPlayer.Character:GetDescendants()) do
         if v:IsA("ParticleEmitter") or v:IsA("Trail") then
@@ -912,6 +1024,6 @@ end)
 
 -- 菜单底部信息
 local InfoSection = UtilityTab:section("菜单信息", false)
-InfoSection:Label("📌 黑帽菜单 v1.4")
-InfoSection:Label("✅ 持续更新可用功能 | 4大专区")
-InfoSection:Label("😻 关注黑帽猫猫获取更多功能情报")
+InfoSection:Label("黑帽菜单 v1.4")
+InfoSection:Label("持续更新可用功能 | 6大专区")
+InfoSection:Label("😻 关注黑帽猫猫获取更多功能情报，此脚本无需钱，不要倒卖")
