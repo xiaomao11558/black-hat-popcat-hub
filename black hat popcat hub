@@ -920,6 +920,82 @@ UtilitySection:Toggle("显示附近NPC", "实时统计周围NPC数量", false, f
     end
 end)
 
+UtilitySection:Toggle("显示最近玩家", "实时显示周围距离你最近的玩家名字", false, function(state)
+local closestPlayerGui = game.CoreGui:FindFirstChild("ClosestPlayerGui")
+local playerUpdateConnection = nil -- 存储监听连接，方便关闭时断开
+ 
+if state then
+if not closestPlayerGui then
+closestPlayerGui = Instance.new("ScreenGui")
+closestPlayerGui.Name = "ClosestPlayerGui"
+closestPlayerGui.Parent = game.CoreGui
+ 
+local playerLabel = Instance.new("TextLabel")
+playerLabel.Position = UDim2.new(0.01, 0, 0.13, 0) -- 位于NPC数量下方
+playerLabel.Size = UDim2.new(0.2, 0, 0.03, 0)
+playerLabel.TextColor3 = Color3.new(1, 1, 1)
+playerLabel.BackgroundTransparency = 0.5
+playerLabel.BackgroundColor3 = Color3.new(0, 0, 0)
+playerLabel.Font = Enum.Font.Gotham
+playerLabel.TextSize = 14
+playerLabel.Parent = closestPlayerGui
+ 
+-- 实时更新最近玩家信息（每0.3秒检测一次）
+playerUpdateConnection = game:GetService("RunService").Stepped:Connect(function()
+if not closestPlayerGui or not game.Players.LocalPlayer.Character then
+playerLabel.Text = "最近玩家: 无"
+playerLabel.TextColor3 = Color3.new(0.7, 0.7, 0.7)
+return
+end
+ 
+local localPlayer = game.Players.LocalPlayer
+local localPlayerPos = localPlayer.Character.HumanoidRootPart.Position
+local closestPlayer = nil
+local closestDistance = math.huge
+local detectRadius = 300 -- 检测半径（单位：studs，可调整）
+ 
+-- 遍历所有其他玩家
+for _, plr in pairs(game.Players:GetPlayers()) do
+if plr ~= localPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+local plrPos = plr.Character.HumanoidRootPart.Position
+local distance = (plrPos - localPlayerPos).Magnitude
+ 
+-- 筛选在检测半径内且距离最近的玩家
+if distance <= detectRadius and distance < closestDistance then
+closestDistance = distance
+closestPlayer = plr
+end
+end
+end
+ 
+-- 更新标签显示
+if closestPlayer then
+playerLabel.Text = string.format("最近玩家: %s (%.1f studs)", closestPlayer.Name, closestDistance)
+-- 根据距离调整颜色（<50=红色，50-150=黄色，>150=绿色）
+if closestDistance < 50 then
+playerLabel.TextColor3 = Color3.new(1, 0.2, 0.2)
+elseif closestDistance <= 150 then
+playerLabel.TextColor3 = Color3.new(1, 1, 0)
+else
+playerLabel.TextColor3 = Color3.new(0.2, 1, 0.2)
+end
+else
+playerLabel.Text = "最近玩家: 无（范围内）"
+playerLabel.TextColor3 = Color3.new(0.7, 0.7, 0.7)
+end
+end)
+end
+else
+-- 关闭时销毁UI并断开监听
+if closestPlayerGui then
+closestPlayerGui:Destroy()
+end
+if playerUpdateConnection then
+playerUpdateConnection:Disconnect()
+end
+end
+end)
+
 UtilitySection:Label("视觉辅助")
 UtilitySection:Dropdown("角色颜色", "更改角色颜色", { "红色", "蓝色", "绿色", "黄色", "紫色", "黑色", "白色" }, function(s)
     local colorMap = {
