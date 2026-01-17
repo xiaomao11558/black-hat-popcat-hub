@@ -1,398 +1,123 @@
-local library = loadstring(game:HttpGet(('https://github.com/DevSloPo/Auto/raw/main/Ware-obfuscated.lua')))()
-
--- 全局变量存储核心数据
-local savedPosition = nil
-local infiniteJumpEnabled = false
-local noclipEnabled = false
-local autoWalkEnabled = false
-local autoAttackEnabled = false
-local ESPEnabled = false
-local ESPGui = nil
-local speedBoostEnabled = false
-local gravityChanged = false
-local originalGravity = workspace.Gravity
--- 新增：视觉功能全局变量
-local fogDisabled = false
-local shadowDisabled = false
-local originalFogEnd = game.Lighting.FogEnd
-local originalShadowEnabled = game.Lighting.GlobalShadows
-
--- 创建主窗口
-local window = library:new("POPCAT-黑帽-菜单")
-
--- 1. 通用专区（原有代码不变）
-local MovementTab = window:Tab("通用", "7733774602")
-local MovementSection = MovementTab:section("核心移动控制", true)
-
-MovementSection:Label("速度与跳跃调整")
-MovementSection:Slider("移动速度", "最大5000", 16, 0, 5000, false, function(v)
-    if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
-        game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = v
-    end
-end)
-
-MovementSection:Slider("跳跃高度", "最大1000", 50, 0, 1000, false, function(v)
-    if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
-        game.Players.LocalPlayer.Character.Humanoid.JumpPower = v
-    end
-end)
-
-MovementSection:Toggle("无限跳跃", "空中可连续跳跃", false, function(state)
-    infiniteJumpEnabled = state
-    if state then
-        game:GetService("UserInputService").JumpRequest:Connect(function()
-            if infiniteJumpEnabled and game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
-                game.Players.LocalPlayer.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-            end
-        end)
-    end
-end)
-
-MovementSection:Toggle("自动前进", "持续向前移动", false, function(state)
-    autoWalkEnabled = state
-    while autoWalkEnabled do
-        task.wait()
-        if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
-            game.Players.LocalPlayer.Character.Humanoid:MoveTo(game.Players.LocalPlayer.Character.Humanoid.RootPart.CFrame * CFrame.new(0, 0, -1).Position)
-        end
-    end
-end)
-
--- 新增：重力控制
-MovementSection:Label("重力调节")
-MovementSection:Slider("重力强度", "默认196.2", 196.2, 10, 500, false, function(v)
-    workspace.Gravity = v
-    gravityChanged = true
-end)
-
-MovementSection:Button("恢复默认重力", function()
-    workspace.Gravity = originalGravity
-    gravityChanged = false
-    warn("重力已恢复默认值！")
-end)
-
--- 飞行功能（原有保留）
-MovementSection:Label("飞行功能")
-MovementSection:Button("加载飞行脚本 (open source)", function()
-    pcall(function()
-        loadstring(game:HttpGet("https://pastebin.com/raw/dSzfU5iB"))()
-        warn("飞行脚本加载成功！")
-    end)
-end)
-MovementSection:Button("无敌少侠飞行 (R15专属)", function()
-    pcall(function()
-        loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Invinicible-Flight-R15-45414"))()
-        warn("无敌少侠飞行加载成功！（仅支持R15角色）")
-    end)
-end)
-
--- 隐身功能（原有保留）
-MovementSection:Label("隐身功能")
-MovementSection:Button("启用隐身", function()
-    pcall(function()
-        loadstring(game:HttpGet('https://pastebin.com/raw/3Rnd9rHf'))()
-        warn("隐身功能已启用！")
-    end)
-end)
-
--- ESP
-MovementSection:Label("透视功能")
-MovementSection:Button("加载透视脚本 (open source)", function()
-    pcall(function()
-        -- 服务引用
+local lib = loadstring(game:HttpGet"https://raw.githubusercontent.com/dawid-scripts/UI-Libs/main/Vape.txt")()
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
-local Player = Players.LocalPlayer
-local PlayerGui = Player:WaitForChild("PlayerGui")
+local UserInputService = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
+local PlayerName = LocalPlayer.Name
 
--- 全局ESP开关状态
-local isESPEnabled = true
+-- 全局变量
+local savedPosition = nil
+local numberedPositions = {}
+local selectedPlayer = nil
+local loopTpActive = false
+local loopTpConn = nil
+local xrayActive = false
+local xrayIgnored = {}
+local xrayColor = Color3.fromRGB(255, 255, 0)
+-- 甩飞功能变量
+local flingSelectedPlayer = nil
+local flingActive = false
+local flingLoopConn = nil
+getgenv().OldPos = nil
+getgenv().FPDH = Workspace.FallenPartsDestroyHeight
 
--- 创建ESP容器GUI
-local ESPGui = Instance.new("ScreenGui")
-ESPGui.Name = "PlayerESP"
-ESPGui.Parent = PlayerGui
-ESPGui.IgnoreGuiInset = true
+-- 右上角时间显示
+local TimeGui = Instance.new("ScreenGui")
+TimeGui.Name = "TimeDisplayGui"
+TimeGui.Parent = LocalPlayer.PlayerGui
 
--- 开关按钮（右上角）
-local ToggleButton = Instance.new("TextButton")
-ToggleButton.Name = "ESPToggle"
-ToggleButton.Size = UDim2.new(0, 100, 0, 35)
-ToggleButton.Position = UDim2.new(0.95, -100, 0.02, 0)
-ToggleButton.BackgroundColor3 = Color3.new(0.15, 0.15, 0.15)
-ToggleButton.Text = "关闭ESP"
-ToggleButton.TextColor3 = Color3.new(1,1,1)
-ToggleButton.Font = Enum.Font.GothamBold
-ToggleButton.TextSize = 14
-ToggleButton.BorderSizePixel = 1
-ToggleButton.BorderColor3 = Color3.new(0.5, 0.5, 0.5)
-ToggleButton.AutoButtonColor = true
-ToggleButton.Parent = ESPGui
+local TimeLabel = Instance.new("TextLabel")
+TimeLabel.Name = "TimeLabel"
+TimeLabel.Parent = TimeGui
+TimeLabel.BackgroundTransparency = 1
+TimeLabel.Position = UDim2.new(0.98, -200, 0.02, 0)
+TimeLabel.Size = UDim2.new(0, 200, 0, 30)
+TimeLabel.Font = Enum.Font.SourceSans
+TimeLabel.TextSize = 14
+TimeLabel.TextColor3 = Color3.new(1, 1, 1)
+TimeLabel.TextXAlignment = Enum.TextXAlignment.Right
+TimeLabel.TextYAlignment = Enum.TextYAlignment.Top
+TimeLabel.TextStrokeTransparency = 0.5
+TimeLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
 
--- 按钮点击事件
-ToggleButton.MouseButton1Click:Connect(function()
-    isESPEnabled = not isESPEnabled
-    ToggleButton.Text = isESPEnabled and "关闭ESP" or "开启ESP"
-    for _, playerESP in pairs(ESPGui:GetChildren()) do
-        if playerESP:IsA("Frame") then
-            playerESP.Visible = isESPEnabled
-        end
-    end
-end)
-
--- 存储每个玩家的ESP元素
-local PlayerESPData = {}
-
--- 团队颜色检测（优先读取TeamColor，无则默认白色）
-local function getTeamColor(targetPlayer)
-    if targetPlayer.Team ~= nil then
-        return targetPlayer.TeamColor.Color
-    end
-    return Color3.new(1,1,1) -- 默认白色
-end
-
--- 创建单个玩家的ESP元素（50x70尺寸+细框+极细血条+团队颜色）
-local function createPlayerESP(targetPlayer)
-    if targetPlayer == Player then return end
-
-    -- ESP主容器（调整为50x70）
-    local ESPFrame = Instance.new("Frame")
-    ESPFrame.Name = targetPlayer.Name .. "_ESP"
-    ESPFrame.Size = UDim2.new(0, 50, 0, 70) -- 方框尺寸50x70
-    ESPFrame.BackgroundTransparency = 1
-    ESPFrame.Parent = ESPGui
-    ESPFrame.Visible = isESPEnabled
-
-    -- 方框（变细：边框1像素→0.5视觉效果）
-    local MainBox = Instance.new("Frame")
-    MainBox.Size = UDim2.new(1, 0, 1, 0)
-    MainBox.BackgroundColor3 = Color3.new(0,0,0)
-    MainBox.BackgroundTransparency = 0.9
-    MainBox.BorderSizePixel = 1 -- 边框粗细1像素（更细）
-    MainBox.BorderColor3 = getTeamColor(targetPlayer) -- 团队颜色
-    MainBox.Parent = ESPFrame
-
-    -- 名字标签（居中+团队颜色）
-    local NameLabel = Instance.new("TextLabel")
-    NameLabel.Size = UDim2.new(1, 0, 0, 16)
-    NameLabel.Position = UDim2.new(0, 0, -0.25, 0)
-    NameLabel.BackgroundTransparency = 1
-    NameLabel.Text = targetPlayer.Name
-    NameLabel.TextColor3 = getTeamColor(targetPlayer) -- 名字随团队颜色
-    NameLabel.Font = Enum.Font.Gotham
-    NameLabel.TextSize = 11
-    NameLabel.TextStrokeTransparency = 0.7
-    NameLabel.TextStrokeColor3 = Color3.new(0,0,0)
-    NameLabel.TextXAlignment = Enum.TextXAlignment.Center
-    NameLabel.Parent = ESPFrame
-
-    -- 血条（极细：宽度3%）
-    local HealthBarContainer = Instance.new("Frame")
-    HealthBarContainer.Size = UDim2.new(0.03, 0, 1, 0) -- 宽度缩至3%（极细）
-    HealthBarContainer.Position = UDim2.new(-0.1, 0, 0, 0)
-    HealthBarContainer.BackgroundColor3 = Color3.new(0.1,0.1,0.1)
-    HealthBarContainer.BorderSizePixel = 1
-    HealthBarContainer.BorderColor3 = Color3.new(0.4,0.4,0.4)
-    HealthBarContainer.Parent = ESPFrame
-
-    local HealthBar = Instance.new("Frame")
-    HealthBar.Size = UDim2.new(1, 0, 1, 0)
-    HealthBar.BackgroundColor3 = Color3.new(0,0.9,0)
-    HealthBar.BorderSizePixel = 0
-    HealthBar.Parent = HealthBarContainer
-
-    -- 距离标签（居中）
-    local DistanceLabel = Instance.new("TextLabel")
-    DistanceLabel.Size = UDim2.new(1, 0, 0, 14)
-    DistanceLabel.Position = UDim2.new(0, 0, 1.15, 0)
-    DistanceLabel.BackgroundTransparency = 1
-    DistanceLabel.Text = "距离: 0"
-    DistanceLabel.TextColor3 = Color3.new(0.9,0.9,0.9)
-    DistanceLabel.Font = Enum.Font.Gotham
-    DistanceLabel.TextSize = 9
-    DistanceLabel.TextStrokeTransparency = 0.7
-    DistanceLabel.TextStrokeColor3 = Color3.new(0,0,0)
-    DistanceLabel.TextXAlignment = Enum.TextXAlignment.Center
-    DistanceLabel.Parent = ESPFrame
-
-    -- 存储数据
-    PlayerESPData[targetPlayer] = {
-        Frame = ESPFrame,
-        MainBox = MainBox, -- 存储方框用于更新团队颜色
-        NameLabel = NameLabel, -- 存储名字标签用于更新颜色
-        HealthBar = HealthBar,
-        DistanceLabel = DistanceLabel,
-        Humanoid = nil,
-        Torso = nil
+local function UpdateTime()
+    local CurrentTime = os.date("%H:%M:%S")
+    local Weekday = os.date("%A")
+    local WeekdayCN = {
+        ["Monday"] = "星期一",
+        ["Tuesday"] = "星期二",
+        ["Wednesday"] = "星期三",
+        ["Thursday"] = "星期四",
+        ["Friday"] = "星期五",
+        ["Saturday"] = "星期六",
+        ["Sunday"] = "星期日"
     }
-
-    -- 监听角色加载
-    local function onCharacterAdded(character)
-        local Humanoid = character:WaitForChild("Humanoid")
-        local Torso = character:WaitForChild("HumanoidRootPart")
-        PlayerESPData[targetPlayer].Humanoid = Humanoid
-        PlayerESPData[targetPlayer].Torso = Torso
-
-        -- 血条更新
-        Humanoid.HealthChanged:Connect(function()
-            local healthRatio = Humanoid.Health / Humanoid.MaxHealth
-            TweenService:Create(
-                HealthBar,
-                TweenInfo.new(0.2),
-                {Size = UDim2.new(1, 0, healthRatio, 0)}
-            ):Play()
-            -- 血条颜色渐变
-            local barColor = healthRatio > 0.5 and Color3.new(0,0.9,0) or (healthRatio > 0.2 and Color3.new(1,0.7,0) or Color3.new(0.9,0,0))
-            HealthBar.BackgroundColor3 = barColor
-        end)
-    end
-
-    -- 监听团队变更（实时更新颜色）
-    targetPlayer:GetPropertyChangedSignal("Team"):Connect(function()
-        local teamColor = getTeamColor(targetPlayer)
-        PlayerESPData[targetPlayer].MainBox.BorderColor3 = teamColor
-        PlayerESPData[targetPlayer].NameLabel.TextColor3 = teamColor
-    end)
-
-    if targetPlayer.Character then
-        onCharacterAdded(targetPlayer.Character)
-    end
-    targetPlayer.CharacterAdded:Connect(onCharacterAdded)
+    TimeLabel.Text = string.format("%s  %s", CurrentTime, WeekdayCN[Weekday] or Weekday)
 end
 
--- 移除玩家的ESP元素
-local function removePlayerESP(targetPlayer)
-    if PlayerESPData[targetPlayer] then
-        PlayerESPData[targetPlayer].Frame:Destroy()
-        PlayerESPData[targetPlayer] = nil
+UpdateTime()
+RunService.Heartbeat:Connect(function()
+    UpdateTime()
+end)
+
+-- 主面板创建
+local win = lib:Window("BHP hub  你好 " .. PlayerName, Color3.fromRGB(44, 120, 224), Enum.KeyCode.RightControl)
+local mainTab = win:Tab("通用")
+local flyTab = win:Tab("飞行（fly）")
+local espTab = win:Tab("透视（esp）")
+local tpTab = win:Tab("传送（TP）")
+local flingTab = win:Tab("甩飞（fling）") -- 新增甩飞专区
+local changeclr = win:Tab("设置（set）")
+
+-- 核心功能
+local speed = 16
+mainTab:Textbox("移动速度", tostring(speed), function(t)
+    speed = tonumber(t) or 16
+    local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        humanoid.WalkSpeed = speed
     end
-end
+end)
 
--- 初始化现有玩家
-for _, targetPlayer in pairs(Players:GetPlayers()) do
-    createPlayerESP(targetPlayer)
-end
+local jumpPower = 50
+mainTab:Textbox("跳跃高度", tostring(jumpPower), function(t)
+    jumpPower = tonumber(t) or 50
+    local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        humanoid.JumpPower = jumpPower
+    end
+end)
 
--- 监听新玩家加入
-Players.PlayerAdded:Connect(createPlayerESP)
-
--- 监听玩家离开
-Players.PlayerRemoving:Connect(removePlayerESP)
-
--- 实时更新ESP（保持下移60像素）
-RunService.RenderStepped:Connect(function()
-    if not isESPEnabled then return end
-
-    local LocalCharacter = Player.Character
-    if not LocalCharacter or not LocalCharacter:FindFirstChild("HumanoidRootPart") then return end
-    local LocalPosition = LocalCharacter.HumanoidRootPart.Position
-
-    for targetPlayer, data in pairs(PlayerESPData) do
-        local TargetTorso = data.Torso
-        if not TargetTorso or not targetPlayer.Character then
-            data.Frame.Visible = false
-            continue
-        end
-
-        -- 躯干位置转屏幕坐标 + 下移60像素
-        local TargetPosition = TargetTorso.Position
-        local ScreenPosition, onScreen = workspace.CurrentCamera:WorldToScreenPoint(TargetPosition)
-        data.Frame.Visible = onScreen
-
-        if onScreen then
-            -- 居中+下移60像素
-            data.Frame.Position = UDim2.new(
-                0, ScreenPosition.X - (data.Frame.AbsoluteSize.X / 2),
-                0, ScreenPosition.Y - (data.Frame.AbsoluteSize.Y / 2) + 60
-            )
-
-            -- 更新距离
-            local Distance = (LocalPosition - TargetPosition).Magnitude
-            data.DistanceLabel.Text = string.format("距离: %.0f", Distance)
-
-            -- 同步血条状态
-            if data.Humanoid then
-                local healthRatio = data.Humanoid.Health / data.Humanoid.MaxHealth
-                data.HealthBar.Size = UDim2.new(1, 0, healthRatio, 0)
-                local barColor = healthRatio > 0.5 and Color3.new(0,0.9,0) or (healthRatio > 0.2 and Color3.new(1,0.7,0) or Color3.new(0.9,0,0))
-                data.HealthBar.BackgroundColor3 = barColor
+local infJump = false
+mainTab:Toggle("无限跳", infJump, function(t)
+    infJump = t
+    local UIS = game:GetService("UserInputService")
+    local player = LocalPlayer
+    
+    UIS.InputBegan:Connect(function(input)
+        if infJump and input.KeyCode == Enum.KeyCode.Space then
+            local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
             end
         end
-    end
-end)
-        warn("透视脚本加载成功！")
     end)
 end)
 
--- 移动锁功能（原有保留）
-MovementSection:Label("移动锁功能")
-MovementSection:Button("启用移动锁", function()
-    pcall(function()
-        loadstring(game:HttpGet("https://pastebin.com/raw/LBr2RcBZ"))()
-        warn("移动锁已启用！")
-    end)
-end)
-
--- 新增：瞬间转身
-MovementSection:Button("180度转身", function()
-    if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        local rootPart = game.Players.LocalPlayer.Character.HumanoidRootPart
-        rootPart.CFrame = rootPart.CFrame * CFrame.Angles(0, math.rad(180), 0)
-    end
-end)
-
-MovementSection:Button("重置移动参数", function()
-    if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
-        game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = 16
-        game.Players.LocalPlayer.Character.Humanoid.JumpPower = 50
-        infiniteJumpEnabled = false
-        autoWalkEnabled = false
-        speedBoostEnabled = false
-    end
-    if gravityChanged then
-        workspace.Gravity = originalGravity
-        gravityChanged = false
-    end
-end)
-
--- 2. 生存与防御专区（原有代码不变）
-local SurvivalTab = window:Tab("生存防御", "78892482588180")
-local SurvivalSection = SurvivalTab:section("生存核心功能", true)
-
-SurvivalSection:Label("生命值与防御控制")
-SurvivalSection:Slider("生命值调整", "0-100000", 100, 0, 100000, false, function(v)
-    if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
-        game.Players.LocalPlayer.Character.Humanoid.MaxHealth = v
-        game.Players.LocalPlayer.Character.Humanoid.Health = v
-    end
-end)
-
-SurvivalSection:Toggle("无敌模式", "不受任何伤害", false, function(state)
-    if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
-        game.Players.LocalPlayer.Character.Humanoid.MaxHealth = state and math.huge or 100
-        game.Players.LocalPlayer.Character.Humanoid.Health = state and math.huge or 100
-        game.Players.LocalPlayer.Character.Humanoid:SetAttribute("Invincible", state)
-    end
-end)
-
-SurvivalSection:Toggle("穿墙模式", "穿越固体障碍物", false, function(state)
-    noclipEnabled = state
+local noclip = false
+mainTab:Toggle("穿墙", noclip, function(t)
+    noclip = t
+    local player = LocalPlayer
     local function noclipLoop()
-        while noclipEnabled do
-            task.wait()
-            if game.Players.LocalPlayer.Character then
-                for _, part in pairs(game.Players.LocalPlayer.Character:GetDescendants()) do
-                    if part:IsA("BasePart") then
-                        part.CanCollide = false
+        while noclip and task.wait() do
+            local character = player.Character
+            if character then
+                for _,v in pairs(character:GetDescendants()) do
+                    if v:IsA("BasePart") and v.CanCollide then
+                        v.CanCollide = false
                     end
-                end
-            end
-        end
-        if game.Players.LocalPlayer.Character then
-            for _, part in pairs(game.Players.LocalPlayer.Character:GetDescendants()) do
-                if part:IsA("BasePart") then
-                    part.CanCollide = true
                 end
             end
         end
@@ -400,706 +125,457 @@ SurvivalSection:Toggle("穿墙模式", "穿越固体障碍物", false, function(
     task.spawn(noclipLoop)
 end)
 
-SurvivalSection:Label("额外防御功能")
-SurvivalSection:Toggle("防击退", "不受外力击退", false, function(state)
-    if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        game.Players.LocalPlayer.Character.HumanoidRootPart.Anchored = state
+local rotateActive = false
+local rotateSpeed = 1
+local rotateConn = nil
+mainTab:Textbox("旋转速度", tostring(rotateSpeed), function(t)
+    local num = tonumber(t)
+    if num then
+        rotateSpeed = math.abs(num)
+    end
+end)
+mainTab:Toggle("启用旋转", rotateActive, function(t)
+    rotateActive = t
+    if rotateConn then
+        rotateConn:Disconnect()
+        rotateConn = nil
+    end
+    if rotateActive then
+        rotateConn = RunService.RenderStepped:Connect(function(dt)
+            local character = LocalPlayer.Character
+            local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+            if humanoidRootPart then
+                humanoidRootPart.CFrame = humanoidRootPart.CFrame * CFrame.Angles(0, rotateSpeed * dt, 0)
+            end
+        end)
     end
 end)
 
--- 新增：反作弊免疫（基础防护）
-SurvivalSection:Button("启用基础反检测", function()
-    pcall(function()
-        -- 禁用部分反作弊检测点
-        game:GetService("Players").LocalPlayer.PlayerGui:SetTopbarTransparency(1)
-        game:GetService("RunService").Stepped:Connect(function()
-            if game.Players.LocalPlayer.Character then
-                game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = math.clamp(game.Players.LocalPlayer.Character.Humanoid.WalkSpeed, 0, 5000)
-            end
-        end)
-        warn("基础反检测已启用！")
+local brightnessActive = false
+local originalBrightness = Lighting.Brightness
+mainTab:Toggle("亮度", brightnessActive, function(t)
+    brightnessActive = t
+    task.spawn(function()
+        while brightnessActive and task.wait() do
+            Lighting.Brightness = 3
+        end
+        Lighting.Brightness = originalBrightness
     end)
 end)
 
--- 5. 碰撞箱增强专区（新增）
-local HitboxTab = window:Tab("范围", "8112567890")
-local HitboxSection = HitboxTab:section("碰撞箱核心功能", true)
- 
--- 全局变量存储碰撞箱数据
-local hitboxEnabled = false
-local hitboxSize = 10 -- 默认碰撞箱大小
-local originalHitboxes = {} -- 存储原始碰撞箱数据
-local originalCanCollide = {} -- 存储原始碰撞状态
-local renderSteppedConnection = nil -- 自动刷新连接
-local characterCache = {} -- 角色缓存，减少重复查找
- 
--- 创建可视化碰撞箱（红色正方形、透明度50%、贴合躯干、无卡顿）
-local function createVisualHitbox(character)
--- 优先获取躯干部件（适配R15/R6）
-local torso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
-if not torso then return end
- 
--- 复用现有可视化碰撞箱（避免重复创建销毁，减少卡顿）
-local visualHitbox = character:FindFirstChild("VisualHitbox")
-if not visualHitbox then
-visualHitbox = Instance.new("Part")
-visualHitbox.Name = "VisualHitbox"
-visualHitbox.Anchored = false
-visualHitbox.CanCollide = false
-visualHitbox.Transparency = 0.5 -- 保持可见，透明度50%
-visualHitbox.BrickColor = BrickColor.Red()
-visualHitbox.Material = Enum.Material.Plastic -- 低消耗材质
-visualHitbox.Parent = character
- 
--- 一次性创建约束（复用不重建）
-local weld = Instance.new("WeldConstraint")
-weld.Name = "HitboxWeld"
-weld.Part0 = torso
-weld.Part1 = visualHitbox
-weld.Parent = visualHitbox
-end
- 
--- 仅更新必要属性（减少渲染开销）
-visualHitbox.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
-visualHitbox.Position = torso.Position
-visualHitbox.Visible = true -- 强制保持可见，避免不可见问题
-end
- 
--- 应用碰撞箱设置（单个角色，轻量执行）
-local function applyHitboxToCharacter(character)
-if not hitboxEnabled or not character or characterCache[character] == "processing" then return end
-characterCache[character] = "processing" -- 防止并发执行
- 
--- 优先获取核心部件（缓存常用部件，减少查找开销）
-local torso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
-local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-if not torso or not humanoidRootPart then
-characterCache[character] = nil
-return
-end
- 
--- 保存原始数据（仅首次保存，避免重复操作）
-if not originalHitboxes[character] then
-originalHitboxes[character] = humanoidRootPart.Size
-end
-if not originalCanCollide[character] then
-originalCanCollide[character] = {}
--- 仅记录核心躯干部件（减少数据量和遍历消耗）
-local keyParts = {torso.Name, "HumanoidRootPart", "Head"}
-for _, partName in pairs(keyParts) do
-local part = character:FindFirstChild(partName)
-if part and part:IsA("BasePart") then
-originalCanCollide[character][partName] = part.CanCollide
-end
-end
-end
- 
--- 仅更新变化的属性（减少引擎通信开销）
-if humanoidRootPart.Size ~= Vector3.new(hitboxSize, hitboxSize, hitboxSize) then
-humanoidRootPart.Size = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
-end
--- 设置核心部件不可碰撞（支持穿过）
-local keyParts = {torso.Name, "HumanoidRootPart", "Head"}
-for _, partName in pairs(keyParts) do
-local part = character:FindFirstChild(partName)
-if part and part:IsA("BasePart") and part.CanCollide then
-part.CanCollide = false
-end
-end
- 
--- 创建/更新可视化碰撞箱
-createVisualHitbox(character)
-characterCache[character] = nil
-end
- 
--- 恢复原始碰撞箱状态（单个角色）
-local function restoreCharacterHitbox(character)
-if characterCache[character] == "processing" then return end
-characterCache[character] = "processing"
- 
-local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-if humanoidRootPart and originalHitboxes[character] then
-humanoidRootPart.Size = originalHitboxes[character]
-end
--- 恢复碰撞状态
-if originalCanCollide[character] then
-for partName, canCollide in pairs(originalCanCollide[character]) do
-local part = character:FindFirstChild(partName)
-if part and part:IsA("BasePart") then
-part.CanCollide = canCollide
-end
-end
-originalCanCollide[character] = nil
-end
--- 隐藏可视化碰撞箱（保留对象，避免重复创建）
-local visualHitbox = character:FindFirstChild("VisualHitbox")
-if visualHitbox then
-visualHitbox.Visible = false
-end
-originalHitboxes[character] = nil
-characterCache[character] = nil
-end
- 
--- 自动刷新碰撞箱（超低消耗，避免卡顿）
-local function startAutoRefresh()
-if renderSteppedConnection then return end
--- 优化刷新频率：100ms一次（平衡流畅度和性能，比50ms更省资源）
-local refreshInterval = 0.1
-local lastRefreshTime = tick()
-renderSteppedConnection = game:GetService("RunService").RenderStepped:Connect(function()
-if not hitboxEnabled then return end
-local currentTime = tick()
-if currentTime - lastRefreshTime < refreshInterval then return end
-lastRefreshTime = currentTime
- 
--- 遍历所有其他玩家，轻量同步
-for _, player in pairs(game.Players:GetPlayers()) do
-if player ~= game.Players.LocalPlayer and player.Character then
-task.spawn(applyHitboxToCharacter, player.Character) -- 异步执行，避免阻塞
-end
-end
-end)
-end
- 
--- 停止自动刷新
-local function stopAutoRefresh()
-if renderSteppedConnection then
-renderSteppedConnection:Disconnect()
-renderSteppedConnection = nil
-end
--- 清空缓存
-characterCache = {}
-end
- 
--- 监听新玩家加入和角色重生（自动适配）
-game.Players.PlayerAdded:Connect(function(player)
-if player == game.Players.LocalPlayer then return end
-player.CharacterAdded:Connect(function(character)
-task.wait(0.3) -- 缩短等待，快速响应
-if hitboxEnabled then
-task.spawn(applyHitboxToCharacter, character)
-end
-end)
-end)
- 
--- 碰撞箱功能开关
-HitboxSection:Toggle("启用碰撞箱增强", "对所有其他玩家生效，可穿过，无卡顿", false, function(state)
-hitboxEnabled = state
-if state then
--- 启用时应用到所有现有玩家（异步执行，避免卡顿）
-for _, player in pairs(game.Players:GetPlayers()) do
-if player ~= game.Players.LocalPlayer and player.Character then
-task.spawn(applyHitboxToCharacter, player.Character)
-end
-end
-startAutoRefresh()
-warn("碰撞箱增强已启用！可穿过其他玩家，可视化保持可见")
-else
--- 关闭时恢复所有玩家状态（异步执行）
-for _, player in pairs(game.Players:GetPlayers()) do
-if player ~= game.Players.LocalPlayer and player.Character then
-task.spawn(restoreCharacterHitbox, player.Character)
-end
-end
-stopAutoRefresh()
-warn("碰撞箱增强已关闭，恢复原始状态！")
-end
-end)
- 
--- 碰撞箱大小调节（最大100）
-HitboxSection:Slider("碰撞箱大小", "默认10，最大100", 10, 5, 100, false, function(v)
-hitboxSize = v
--- 调节大小时异步同步，避免卡顿
-if hitboxEnabled then
-for _, player in pairs(game.Players:GetPlayers()) do
-if player ~= game.Players.LocalPlayer and player.Character then
-task.spawn(applyHitboxToCharacter, player.Character)
-end
-end
-end
+local fogRemovalActive = false
+local originalFogEnd = Lighting.FogEnd
+local originalFogStart = Lighting.FogStart
+mainTab:Toggle("除雾", fogRemovalActive, function(t)
+    fogRemovalActive = t
+    task.spawn(function()
+        while fogRemovalActive and task.wait() do
+            Lighting.FogEnd = 100000
+            Lighting.FogStart = 100000
+        end
+        Lighting.FogEnd = originalFogEnd
+        Lighting.FogStart = originalFogStart
+    end)
 end)
 
--- 3. 传送与定位专区（原有代码不变）
-local TeleportTab = window:Tab("传送定位", "7990345678")
-local TeleportSection = TeleportTab:section("传送核心功能", true)
-
-TeleportSection:Label("📍 位置管理")
-TeleportSection:Button("保存当前位置", function()
-    if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        savedPosition = game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame
-        warn("位置已保存！")
-    else
-        warn("无法保存位置 - 角色未加载")
-    end
-end)
-
-TeleportSection:Button("传送到保存位置", function()
-    if savedPosition and game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = savedPosition
-    else
-        warn("未保存位置或角色未加载！")
-    end
-end)
-
--- 新增：保存多个位置
-local savedPositions = {}
-TeleportSection:Textbox("保存位置到插槽", "格式: 1-10", "输入插槽号", function(s)
-    local slot = tonumber(s)
-    if slot and slot >= 1 and slot <= 10 and game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        savedPositions[slot] = game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame
-        warn("位置已保存到插槽 " .. slot .. "！")
-    else
-        warn("插槽号无效（仅支持1-10）！")
-    end
-end)
-
-TeleportSection:Textbox("从插槽传送", "格式: 1-10", "输入插槽号", function(s)
-    local slot = tonumber(s)
-    if slot and slot >= 1 and slot <= 10 and savedPositions[slot] and game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = savedPositions[slot]
-    else
-        warn("插槽 " .. slot .. " 无保存位置！")
-    end
-end)
-
-TeleportSection:Button("传送到随机玩家", function()
-    local players = game.Players:GetPlayers()
-    local targetPlayers = {}
-    for _, plr in pairs(players) do
-        if plr ~= game.Players.LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-            table.insert(targetPlayers, plr)
+local customNameActive = false
+local customNameText = "自定义名称"
+local customNameGui = nil
+mainTab:Textbox("自定义头顶名称", customNameText, function(t)
+    if t and t ~= "" then
+        customNameText = t
+        if customNameGui and customNameGui:FindFirstChild("NameLabel") then
+            customNameGui.NameLabel.Text = customNameText
         end
     end
-    if #targetPlayers > 0 then
-        local randomPlr = targetPlayers[math.random(1, #targetPlayers)]
-        game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = randomPlr.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 5)
-    else
-        warn("没有可传送的玩家！")
+end)
+mainTab:Toggle("启用自定义头顶显名", customNameActive, function(t)
+    customNameActive = t
+    if customNameGui then
+        customNameGui:Destroy()
+        customNameGui = nil
     end
-end)
+    if customNameActive then
+        local character = LocalPlayer.Character
+        local head = character and character:FindFirstChild("Head")
+        if head then
+            customNameGui = Instance.new("BillboardGui")
+            customNameGui.Name = "CustomNameTag"
+            customNameGui.Parent = head
+            customNameGui.Size = UDim2.new(0, 300, 0, 60)
+            customNameGui.AlwaysOnTop = true
+            customNameGui.ExtentsOffset = Vector3.new(0, 2, 0)
+            customNameGui.StudsOffset = Vector3.new(0, 0.5, 0)
 
-TeleportSection:Label("🎯 精准传送")
-local playerList = {}
-for _, plr in pairs(game.Players:GetPlayers()) do
-    if plr ~= game.Players.LocalPlayer then
-        table.insert(playerList, plr.Name)
-    end
-end
-
-TeleportSection:Dropdown("传送到指定玩家", "选择目标玩家", playerList, function(s)
-    local targetPlr = game.Players:FindFirstChild(s)
-    if targetPlr and targetPlr.Character and targetPlr.Character:FindFirstChild("HumanoidRootPart") then
-        game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = targetPlr.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 5)
-    else
-        warn("目标玩家未加载或不存在！")
-    end
-end)
-
--- 新增：传送至高处
-TeleportSection:Button("传送至100高度", function()
-    if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        local rootPart = game.Players.LocalPlayer.Character.HumanoidRootPart
-        rootPart.CFrame = CFrame.new(rootPart.Position.X, 100, rootPart.Position.Z)
-    end
-end)
-
-TeleportSection:Textbox("坐标传送(X,Y,Z)", "格式: X,Y,Z", "输入坐标", function(s)
-    local x, y, z = string.match(s, "(%d+%.?%d*),(%d+%.?%d*),(%d+%.?%d*)")
-    if x and y and z then
-        x = tonumber(x)
-        y = tonumber(y)
-        z = tonumber(z)
-        if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(x, y, z)
-        end
-    else
-        warn("坐标格式错误！请输入 X,Y,Z")
-    end
-end)
-
-TeleportSection:Button("返回出生点", function()
-    if game.Players.LocalPlayer.Character then
-        game.Players.LocalPlayer:LoadCharacter()
-    end
-end)
-
--- 6. 其他脚本专区（新增）
-local ExternalScriptTab = window:Tab("其他脚本中心", "8223678901")
-local ExternalScriptSection = ExternalScriptTab:section("其他脚本加载", true)
- 
-ExternalScriptSection:Label("其他脚本")
--- XK Hub 加载
-ExternalScriptSection:Button("加载 XK Hub", function()
-pcall(function()
-loadstring(game:HttpGet("https://github.com/devslopo/DVES/raw/main/XK%20Hub"))()
-warn("XK Hub 加载成功！")
-end)
-end)
- 
--- RB Hub 加载
-ExternalScriptSection:Button("加载 RB Hub", function()
-pcall(function()
-loadstring(game:HttpGet("https://raw.githubusercontent.com/Yungengxin/roblox/refs/heads/main/Rb-Hub"))()
-warn("RB Hub 加载成功！")
-end)
-end)
- 
--- 脚本中心 加载（解码ASCII字符）
-ExternalScriptSection:Button("加载 脚本中心", function()
-pcall(function()
--- 解码ASCII字符串为URL：https://pastebin.com/raw/gexHwA1
-local url = string.char(104,116,116,112,115,58,47,47,112,97,115,116,101,98,105,110,46,99,111,109,47,114,97,119,47,103,101,109,120,72,119,65,49)
-loadstring(game:HttpGet(url))()
-warn("脚本中心 加载成功！")
-end)
-end)
- 
--- APT 脚本加载（解码ASCII字符）
-ExternalScriptSection:Button("加载 APT 脚本", function()
-pcall(function()
--- 解码ASCII字符串为URL：https://raw.githubusercontent.com/nainshu/no/main/APT.lua
-local url = string.char(104,116,116,112,115,58,47,47,114,97,119,46,103,105,116,104,117,98,117,115,101,114,99,111,110,116,101,110,116,46,99,111,109,47,110,97,105,110,115,104,117,47,110,111,47,109,97,105,110,47,65,80,84,46,108,117,97)
-loadstring(game:HttpGet(url))()
-warn("APT 脚本加载成功！")
-end)
-end)
-
--- 4. 辅助与杂项专区
-local UtilityTab = window:Tab("辅助杂项", "8001456789")
-local UtilitySection = UtilityTab:section("实用辅助功能", true)
-
-UtilitySection:Label("基础辅助")
-UtilitySection:Toggle("显示FPS", "实时显示帧率", false, function(state)
-    local fpsGui = game.CoreGui:FindFirstChild("FPSGui")
-    if state then
-        if not fpsGui then
-            fpsGui = Instance.new("ScreenGui")
-            fpsGui.Name = "FPSGui"
-            fpsGui.Parent = game.CoreGui
-            local fpsLabel = Instance.new("TextLabel")
-            fpsLabel.Position = UDim2.new(0.01, 0, 0.01, 0)
-            fpsLabel.Size = UDim2.new(0.1, 0, 0.03, 0)
-            fpsLabel.TextColor3 = Color3.new(1, 1, 1)
-            fpsLabel.BackgroundTransparency = 0.5
-            fpsLabel.BackgroundColor3 = Color3.new(0, 0, 0)
-            fpsLabel.Parent = fpsGui
-            local lastTime = tick()
-            local frameCount = 0
-            game:GetService("RunService").RenderStepped:Connect(function()
-                if not fpsGui then return end
-                frameCount = frameCount + 1
-                local currentTime = tick()
-                if currentTime - lastTime >= 1 then
-                    fpsLabel.Text = "FPS: " .. math.floor(frameCount)
-                    frameCount = 0
-                    lastTime = currentTime
-                end
-            end)
-        end
-    else
-        if fpsGui then
-            fpsGui:Destroy()
+            local nameLabel = Instance.new("TextLabel")
+            nameLabel.Name = "NameLabel"
+            nameLabel.Parent = customNameGui
+            nameLabel.BackgroundTransparency = 1
+            nameLabel.Size = UDim2.new(1, 0, 1, 0)
+            nameLabel.Font = Enum.Font.SourceSansBold
+            nameLabel.TextSize = 22
+            nameLabel.TextColor3 = Color3.new(1,1,1)
+            nameLabel.TextStrokeTransparency = 0.3
+            nameLabel.TextStrokeColor3 = Color3.new(0,0,0)
+            nameLabel.Text = customNameText
+            nameLabel.TextWrapped = true
+            nameLabel.TextXAlignment = Enum.TextXAlignment.Center
         end
     end
 end)
 
--- 新增：显示实时延迟
-UtilitySection:Toggle("显示延迟", "实时显示网络延迟(ms)", false, function(state)
-    local pingGui = game.CoreGui:FindFirstChild("PingGui")
-    if state then
-        if not pingGui then
-            pingGui = Instance.new("ScreenGui")
-            pingGui.Name = "PingGui"
-            pingGui.Parent = game.CoreGui
-            
-            local pingLabel = Instance.new("TextLabel")
-            pingLabel.Position = UDim2.new(0.01, 0, 0.05, 0) -- 位于FPS下方
-            pingLabel.Size = UDim2.new(0.12, 0, 0.03, 0)
-            pingLabel.TextColor3 = Color3.new(1, 1, 1)
-            pingLabel.BackgroundTransparency = 0.5
-            pingLabel.BackgroundColor3 = Color3.new(0, 0, 0)
-            pingLabel.Font = Enum.Font.Gotham
-            pingLabel.TextSize = 14
-            pingLabel.Parent = pingGui
-            
-            -- 实时更新延迟（每1秒获取一次）
-            game:GetService("RunService").Stepped:Connect(function()
-                if not pingGui then return end
-                local ping = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue()
-                pingLabel.Text = "延迟: " .. math.floor(ping) .. "ms"
-                
-                -- 延迟颜色提示（绿色<50ms，黄色50-150ms，红色>150ms）
-                if ping < 50 then
-                    pingLabel.TextColor3 = Color3.new(0, 1, 0)
-                elseif ping < 150 then
-                    pingLabel.TextColor3 = Color3.new(1, 1, 0)
-                else
-                    pingLabel.TextColor3 = Color3.new(1, 0, 0)
-                end
-            end)
-        end
-    else
-        if pingGui then
-            pingGui:Destroy()
+mainTab:Button("重置人物", function()
+    if LocalPlayer.Character then
+        LocalPlayer.Character:BreakJoints()
+        local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.Health = 0
         end
     end
 end)
 
--- 新增：显示附近NPC数量
-UtilitySection:Toggle("显示附近NPC", "实时统计周围NPC数量", false, function(state)
-    local npcGui = game.CoreGui:FindFirstChild("NPCGui")
-    local npcUpdateConnection = nil -- 存储监听连接，方便关闭时断开
+-- 飞行专区
+flyTab:Button("启用通用飞行", function()
+    loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Fly-gui-v3-78856"))()
+end)
+
+flyTab:Button("启用无敌少侠飞行（仅R15有动画）", function()
+    local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+    if isMobile then
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/396abc/Script/refs/heads/main/MobileFly.lua"))()
+    else
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/396abc/Script/refs/heads/main/FlyR15.lua"))()
+    end
+end)
+
+-- 透视专区
+local highlightPlayers = false
+local highlights = {}
+local nameTags = {}
+espTab:Toggle("通用高亮", highlightPlayers, function(t)
+    highlightPlayers = t
+    local players = game:GetService("Players")
     
-    if state then
-        if not npcGui then
-            npcGui = Instance.new("ScreenGui")
-            npcGui.Name = "NPCGui"
-            npcGui.Parent = game.CoreGui
-            
-            local npcLabel = Instance.new("TextLabel")
-            npcLabel.Position = UDim2.new(0.01, 0, 0.09, 0) -- 位于延迟下方
-            npcLabel.Size = UDim2.new(0.15, 0, 0.03, 0)
-            npcLabel.TextColor3 = Color3.new(1, 1, 1)
-            npcLabel.BackgroundTransparency = 0.5
-            npcLabel.BackgroundColor3 = Color3.new(0, 0, 0)
-            npcLabel.Font = Enum.Font.Gotham
-            npcLabel.TextSize = 14
-            npcLabel.Parent = npcGui
-            
-            -- 实时更新附近NPC数量（每0.5秒检测一次）
-            npcUpdateConnection = game:GetService("RunService").Stepped:Connect(function()
-                if not npcGui or not game.Players.LocalPlayer.Character then return end
-                
-                local localPlayerPos = game.Players.LocalPlayer.Character.HumanoidRootPart.Position
-                local npcCount = 0
-                local detectRadius = 200 -- 检测半径（可调整，单位： studs）
-                
-                -- 遍历所有模型，筛选NPC（包含Humanoid且非玩家角色）
-                for _, model in pairs(workspace:GetDescendants()) do
-                    if model:IsA("Model") and model:FindFirstChildOfClass("Humanoid") then
-                        -- 排除玩家角色
-                        local isPlayerCharacter = false
-                        for _, plr in pairs(game.Players:GetPlayers()) do
-                            if plr.Character == model then
-                                isPlayerCharacter = true
-                                break
-                            end
-                        end
-                        if not isPlayerCharacter then
-                            -- 计算距离，在检测半径内则计数
-                            local npcRootPart = model:FindFirstChild("HumanoidRootPart")
-                            if npcRootPart then
-                                local distance = (npcRootPart.Position - localPlayerPos).Magnitude
-                                if distance <= detectRadius then
-                                    npcCount = npcCount + 1
-                                end
-                            end
-                        end
-                    end
-                end
-                
-                npcLabel.Text = "附近NPC: " .. npcCount
-                -- 根据NPC数量调整颜色（0=灰色，1-5=蓝色，>5=橙色）
-                if npcCount == 0 then
-                    npcLabel.TextColor3 = Color3.new(0.7, 0.7, 0.7)
-                elseif npcCount <= 5 then
-                    npcLabel.TextColor3 = Color3.new(0, 0.8, 1)
-                else
-                    npcLabel.TextColor3 = Color3.new(1, 0.6, 0)
-                end
-            end)
-        end
-    else
-        -- 关闭时销毁UI并断开监听
-        if npcGui then
-            npcGui:Destroy()
-        end
-        if npcUpdateConnection then
-            npcUpdateConnection:Disconnect()
-        end
-    end
-end)
+    if highlightPlayers then
+        for _, plr in pairs(players:GetPlayers()) do
+            if plr ~= LocalPlayer and plr.Character then
+                local highlight = Instance.new("Highlight")
+                highlight.Parent = plr.Character
+                highlights[plr] = highlight
 
-UtilitySection:Toggle("显示最近玩家", "实时显示周围距离你最近的玩家名字", false, function(state)
-local closestPlayerGui = game.CoreGui:FindFirstChild("ClosestPlayerGui")
-local playerUpdateConnection = nil -- 存储监听连接，方便关闭时断开
- 
-if state then
-if not closestPlayerGui then
-closestPlayerGui = Instance.new("ScreenGui")
-closestPlayerGui.Name = "ClosestPlayerGui"
-closestPlayerGui.Parent = game.CoreGui
- 
-local playerLabel = Instance.new("TextLabel")
-playerLabel.Position = UDim2.new(0.01, 0, 0.13, 0) -- 位于NPC数量下方
-playerLabel.Size = UDim2.new(0.2, 0, 0.03, 0)
-playerLabel.TextColor3 = Color3.new(1, 1, 1)
-playerLabel.BackgroundTransparency = 0.5
-playerLabel.BackgroundColor3 = Color3.new(0, 0, 0)
-playerLabel.Font = Enum.Font.Gotham
-playerLabel.TextSize = 14
-playerLabel.Parent = closestPlayerGui
- 
--- 实时更新最近玩家信息（每0.3秒检测一次）
-playerUpdateConnection = game:GetService("RunService").Stepped:Connect(function()
-if not closestPlayerGui or not game.Players.LocalPlayer.Character then
-playerLabel.Text = "最近玩家: 无"
-playerLabel.TextColor3 = Color3.new(0.7, 0.7, 0.7)
-return
-end
- 
-local localPlayer = game.Players.LocalPlayer
-local localPlayerPos = localPlayer.Character.HumanoidRootPart.Position
-local closestPlayer = nil
-local closestDistance = math.huge
-local detectRadius = 300 -- 检测半径（单位：studs，可调整）
- 
--- 遍历所有其他玩家
-for _, plr in pairs(game.Players:GetPlayers()) do
-if plr ~= localPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-local plrPos = plr.Character.HumanoidRootPart.Position
-local distance = (plrPos - localPlayerPos).Magnitude
- 
--- 筛选在检测半径内且距离最近的玩家
-if distance <= detectRadius and distance < closestDistance then
-closestDistance = distance
-closestPlayer = plr
-end
-end
-end
- 
--- 更新标签显示
-if closestPlayer then
-playerLabel.Text = string.format("最近玩家: %s (%.1f studs)", closestPlayer.Name, closestDistance)
--- 根据距离调整颜色（<50=红色，50-150=黄色，>150=绿色）
-if closestDistance < 50 then
-playerLabel.TextColor3 = Color3.new(1, 0.2, 0.2)
-elseif closestDistance <= 150 then
-playerLabel.TextColor3 = Color3.new(1, 1, 0)
-else
-playerLabel.TextColor3 = Color3.new(0.2, 1, 0.2)
-end
-else
-playerLabel.Text = "最近玩家: 无（范围内）"
-playerLabel.TextColor3 = Color3.new(0.7, 0.7, 0.7)
-end
-end)
-end
-else
--- 关闭时销毁UI并断开监听
-if closestPlayerGui then
-closestPlayerGui:Destroy()
-end
-if playerUpdateConnection then
-playerUpdateConnection:Disconnect()
-end
-end
-end)
+                local nameTag = Instance.new("BillboardGui")
+                nameTag.Name = "PlayerNameTag"
+                nameTag.Parent = plr.Character.Head
+                nameTag.Size = UDim2.new(0, 200, 0, 50)
+                nameTag.AlwaysOnTop = true
 
-UtilitySection:Label("视觉辅助")
-UtilitySection:Dropdown("角色颜色", "更改角色颜色", { "红色", "蓝色", "绿色", "黄色", "紫色", "黑色", "白色" }, function(s)
-    local colorMap = {
-        ["红色"] = Color3.new(1, 0, 0),
-        ["蓝色"] = Color3.new(0, 0, 1),
-        ["绿色"] = Color3.new(0, 1, 0),
-        ["黄色"] = Color3.new(1, 1, 0),
-        ["紫色"] = Color3.new(0.5, 0, 0.5),
-        ["黑色"] = Color3.new(0, 0, 0),
-        ["白色"] = Color3.new(1, 1, 1)
-    }
-    if game.Players.LocalPlayer.Character then
-        for _, part in pairs(game.Players.LocalPlayer.Character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.Color = colorMap[s] or Color3.new(1, 1, 1)
+                local nameLabel = Instance.new("TextLabel")
+                nameLabel.Parent = nameTag
+                nameLabel.BackgroundTransparency = 1
+                nameLabel.Size = UDim2.new(1, 0, 1, 0)
+                nameLabel.Font = Enum.Font.SourceSansBold
+                nameLabel.TextSize = 18
+                nameLabel.TextColor3 = Color3.new(1,1,1)
+                nameLabel.Text = plr.Name
+                nameTags[plr] = nameTag
             end
         end
-    end
-end)
+        
+        players.PlayerAdded:Connect(function(plr)
+            plr.CharacterAdded:Connect(function(char)
+                if highlightPlayers then
+                    local highlight = Instance.new("Highlight")
+                    highlight.Parent = char
+                    highlights[plr] = highlight
 
--- 新增：除雾功能
-UtilitySection:Toggle("去除雾气", "清除游戏内所有雾气", false, function(state)
-    fogDisabled = state
-    if state then
-        game.Lighting.FogEnd = 10000 -- 雾气范围拉到极远（视觉上消除雾气）
-        warn("雾气已去除！")
+                    local nameTag = Instance.new("BillboardGui")
+                    nameTag.Name = "PlayerNameTag"
+                    nameTag.Parent = char.Head
+                    nameTag.Size = UDim2.new(0, 200, 0, 50)
+                    nameTag.AlwaysOnTop = true
+
+                    local nameLabel = Instance.new("TextLabel")
+                    nameLabel.Parent = nameTag
+                    nameLabel.BackgroundTransparency = 1
+                    nameLabel.Size = UDim2.new(1, 0, 1, 0)
+                    nameLabel.Font = Enum.Font.SourceSansBold
+                    nameLabel.TextSize = 18
+                    nameLabel.TextColor3 = Color3.new(1,1,1)
+                    nameLabel.Text = plr.Name
+                    nameTags[plr] = nameTag
+                end
+            end)
+        end)
     else
-        game.Lighting.FogEnd = originalFogEnd -- 恢复原始雾气设置
-        warn("雾气已恢复默认！")
-    end
-end)
-
--- 新增：去除阴影功能
-UtilitySection:Toggle("去除阴影", "关闭全局阴影提升视野", false, function(state)
-    shadowDisabled = state
-    game.Lighting.GlobalShadows = not state -- 关闭全局阴影（state为true时禁用阴影）
-    -- 额外关闭零件自身阴影投射，彻底消除阴影
-    for _, part in pairs(workspace:GetDescendants()) do
-        if part:IsA("BasePart") then
-            part.CastShadow = not state
+        for plr, highlight in pairs(highlights) do
+            highlight:Destroy()
+            highlights[plr] = nil
         end
-    end
-    warn(state and "全局阴影已关闭！" or "全局阴影已恢复默认！")
-end)
-
-UtilitySection:Label("额外功能")
-UtilitySection:Button("清除所有特效", function()
-    for _, v in pairs(game.Players.LocalPlayer.Character:GetDescendants()) do
-        if v:IsA("ParticleEmitter") or v:IsA("Trail") then
-            v:Destroy()
+        for plr, nameTag in pairs(nameTags) do
+            nameTag:Destroy()
+            nameTags[plr] = nil
         end
     end
 end)
 
-UtilitySection:Toggle("防掉线", "保持连接状态", false, function(state)
-    while state do
-        task.wait(30)
-        local remote = game:GetService("ReplicatedStorage"):FindFirstChildOfClass("RemoteEvent")
-        if remote then
-            remote:FireServer() -- 模拟交互防止掉线
+local function ApplyXray(obj)
+    if obj:IsA("BasePart") and not xrayIgnored[obj] and obj.Parent ~= LocalPlayer.Character then
+        xrayIgnored[obj] = {
+            Transparency = obj.Transparency,
+            Color = obj.Color
+        }
+        obj.Transparency = 0.7
+        obj.Color = xrayColor
+    end
+end
+
+local function RemoveXray(obj)
+    if xrayIgnored[obj] then
+        obj.Transparency = xrayIgnored[obj].Transparency
+        obj.Color = xrayIgnored[obj].Color
+        xrayIgnored[obj] = nil
+    end
+end
+
+espTab:Toggle("启用Xray", xrayActive, function(t)
+    xrayActive = t
+    if xrayActive then
+        for _,obj in pairs(Workspace:GetDescendants()) do
+            ApplyXray(obj)
+        end
+        Workspace.DescendantAdded:Connect(ApplyXray)
+    else
+        for obj,_ in pairs(xrayIgnored) do
+            RemoveXray(obj)
         end
     end
 end)
 
-UtilitySection:Button("重置所有设置", function()
-    -- 重置移动参数
-    if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
-        game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = 16
-        game.Players.LocalPlayer.Character.Humanoid.JumpPower = 50
-        game.Players.LocalPlayer.Character.Humanoid.MaxHealth = 100
-        game.Players.LocalPlayer.Character.Humanoid.Health = 100
-        game.Players.LocalPlayer.Character.Humanoid.BodyDepthScale.Value = 1
-        game.Players.LocalPlayer.Character.Humanoid.BodyHeightScale.Value = 1
-        game.Players.LocalPlayer.Character.Humanoid.BodyWidthScale.Value = 1
+-- 传送专区
+tpTab:Button("保存当前位置", function()
+    local character = LocalPlayer.Character
+    local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+    if humanoidRootPart then
+        savedPosition = humanoidRootPart.CFrame
     end
-    -- 关闭所有开关
-    infiniteJumpEnabled = false
-    noclipEnabled = false
-    autoWalkEnabled = false
-    fogDisabled = false
-    shadowDisabled = false
-    -- 恢复视觉默认设置
-    game.Lighting.FogEnd = originalFogEnd
-    game.Lighting.GlobalShadows = originalShadowEnabled
-    for _, part in pairs(workspace:GetDescendants()) do
-        if part:IsA("BasePart") then
-            part.CastShadow = true
-        end
-    end
-    -- 清除FPS显示
-    local fpsGui = game.CoreGui:FindFirstChild("FPSGui")
-    if fpsGui then
-        fpsGui:Destroy()
-    end
-    -- 恢复重力默认值
-    if gravityChanged then
-        workspace.Gravity = originalGravity
-        gravityChanged = false
-    end
-    warn("所有设置已重置！")
 end)
 
--- 菜单底部信息
-local InfoSection = UtilityTab:section("菜单信息", false)
-InfoSection:Label("黑帽菜单 v1.4")
-InfoSection:Label("持续更新可用功能 | 6大专区")
-InfoSection:Label("😻 关注黑帽猫猫获取更多功能情报，此脚本无需钱，不要倒卖")
+tpTab:Button("传送至保存位置", function()
+    local character = LocalPlayer.Character
+    local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+    if humanoidRootPart and savedPosition then
+        humanoidRootPart.CFrame = savedPosition
+    end
+end)
+
+local saveIdText = "1"
+tpTab:Textbox("位置编号(保存)", saveIdText, function(t)
+    saveIdText = t and t or "1"
+end)
+tpTab:Button("编号保存位置", function()
+    local character = LocalPlayer.Character
+    local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+    if humanoidRootPart and saveIdText ~= "" then
+        numberedPositions[saveIdText] = humanoidRootPart.CFrame
+    end
+end)
+
+local tpIdText = "1"
+tpTab:Textbox("位置编号(传送)", tpIdText, function(t)
+    tpIdText = t and t or "1"
+end)
+tpTab:Button("传送至编号位置", function()
+    local character = LocalPlayer.Character
+    local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+    local targetCFrame = numberedPositions[tpIdText]
+    if humanoidRootPart and targetCFrame then
+        humanoidRootPart.CFrame = targetCFrame
+    end
+end)
+
+local function getPlayerList()
+    local list = {}
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            table.insert(list, plr.Name)
+        end
+    end
+    return list
+end
+local playerDropdown = tpTab:Dropdown("选择玩家", getPlayerList(), function(t)
+    selectedPlayer = Players:FindFirstChild(t)
+end)
+
+task.spawn(function()
+    while task.wait(1) do
+        local newList = getPlayerList()
+        playerDropdown:Refresh(newList)
+    end
+end)
+
+tpTab:Toggle("循环传送选中玩家", loopTpActive, function(t)
+    loopTpActive = t
+    if loopTpConn then
+        loopTpConn:Disconnect()
+        loopTpConn = nil
+    end
+    if loopTpActive then
+        loopTpConn = RunService.Heartbeat:Connect(function()
+            if selectedPlayer and selectedPlayer.Character then
+                local targetRoot = selectedPlayer.Character:FindFirstChild("HumanoidRootPart")
+                local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if targetRoot and myRoot then
+                    myRoot.CFrame = targetRoot.CFrame * CFrame.new(0, 0, 3)
+                end
+            end
+        end)
+    end
+end)
+
+-- 甩飞专区核心功能
+local function SkidFling(TargetPlayer)
+    local Character = LocalPlayer.Character
+    local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+    local RootPart = Humanoid and Humanoid.RootPart
+    local TCharacter = TargetPlayer.Character
+    if not TCharacter then return end
+    local THumanoid = TCharacter:FindFirstChildOfClass("Humanoid")
+    local TRootPart = THumanoid and THumanoid.RootPart
+    local THead = TCharacter:FindFirstChild("Head")
+    local Accessory = TCharacter:FindFirstChildOfClass("Accessory")
+    local Handle = Accessory and Accessory:FindFirstChild("Handle")
+
+    if not (Character and Humanoid and RootPart) then return end
+    if RootPart.Velocity.Magnitude < 50 then
+        getgenv().OldPos = RootPart.CFrame
+    end
+    if THumanoid and THumanoid.Sit then return end
+
+    if THead then
+        Workspace.CurrentCamera.CameraSubject = THead
+    elseif Handle then
+        Workspace.CurrentCamera.CameraSubject = Handle
+    elseif THumanoid and TRootPart then
+        Workspace.CurrentCamera.CameraSubject = THumanoid
+    end
+    if not TCharacter:FindFirstChildWhichIsA("BasePart") then return end
+
+    local FPos = function(BasePart, Pos, Ang)
+        RootPart.CFrame = CFrame.new(BasePart.Position) * Pos * Ang
+        Character:SetPrimaryPartCFrame(CFrame.new(BasePart.Position) * Pos * Ang)
+        RootPart.Velocity = Vector3.new(9e7, 9e7 * 10, 9e7)
+        RootPart.RotVelocity = Vector3.new(9e8, 9e8, 9e8)
+    end
+
+    local SFBasePart = function(BasePart)
+        local TimeToWait = 2
+        local Time = tick()
+        local Angle = 0
+        repeat
+            if RootPart and THumanoid and flingActive then
+                if BasePart.Velocity.Magnitude < 50 then
+                    Angle = Angle + 100
+                    FPos(BasePart, CFrame.new(0, 1.5, 0) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(Angle),0 ,0))
+                    task.wait()
+                    FPos(BasePart, CFrame.new(0, -1.5, 0) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(Angle), 0, 0))
+                    task.wait()
+                    FPos(BasePart, CFrame.new(0, 1.5, 0) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(Angle),0 ,0))
+                    task.wait()
+                    FPos(BasePart, CFrame.new(0, -1.5, 0) + THumanoid.MoveDirection * BasePart.Velocity.Magnitude / 1.25, CFrame.Angles(math.rad(Angle), 0, 0))
+                    task.wait()
+                    FPos(BasePart, CFrame.new(0, 1.5, 0) + THumanoid.MoveDirection, CFrame.Angles(math.rad(Angle),0 ,0))
+                    task.wait()
+                    FPos(BasePart, CFrame.new(0, -1.5, 0) + THumanoid.MoveDirection, CFrame.Angles(math.rad(Angle), 0, 0))
+                    task.wait()
+                else
+                    FPos(BasePart, CFrame.new(0, 1.5, THumanoid.WalkSpeed), CFrame.Angles(math.rad(90), 0, 0))
+                    task.wait()
+                    FPos(BasePart, CFrame.new(0, -1.5, -THumanoid.WalkSpeed), CFrame.Angles(0, 0, 0))
+                    task.wait()
+                    FPos(BasePart, CFrame.new(0, 1.5, THumanoid.WalkSpeed), CFrame.Angles(math.rad(90), 0, 0))
+                    task.wait()
+                    FPos(BasePart, CFrame.new(0, -1.5, 0), CFrame.Angles(math.rad(90), 0, 0))
+                    task.wait()
+                    FPos(BasePart, CFrame.new(0, -1.5, 0), CFrame.Angles(0, 0, 0))
+                    task.wait()
+                    FPos(BasePart, CFrame.new(0, -1.5, 0), CFrame.Angles(math.rad(90), 0, 0))
+                    task.wait()
+                    FPos(BasePart, CFrame.new(0, -1.5, 0), CFrame.Angles(0, 0, 0))
+                    task.wait()
+                end
+            end
+        until Time + TimeToWait < tick() or not flingActive
+    end
+
+    Workspace.FallenPartsDestroyHeight = 0/0
+    local BV = Instance.new("BodyVelocity")
+    BV.Parent = RootPart
+    BV.Velocity = Vector3.new(0, 0, 0)
+    BV.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+    Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+
+    if TRootPart then
+        SFBasePart(TRootPart)
+    elseif THead then
+        SFBasePart(THead)
+    elseif Handle then
+        SFBasePart(Handle)
+    else
+        return
+    end
+
+    BV:Destroy()
+    Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
+    Workspace.CurrentCamera.CameraSubject = Humanoid
+
+    if getgenv().OldPos then
+        repeat
+            RootPart.CFrame = getgenv().OldPos * CFrame.new(0, .5, 0)
+            Character:SetPrimaryPartCFrame(getgenv().OldPos * CFrame.new(0, .5, 0))
+            Humanoid:ChangeState("GettingUp")
+            for _, part in pairs(Character:GetChildren()) do
+                if part:IsA("BasePart") then
+                    part.Velocity, part.RotVelocity = Vector3.new(), Vector3.new()
+                end
+            end
+            task.wait()
+        until (RootPart.Position - getgenv().OldPos.p).Magnitude < 25
+        Workspace.FallenPartsDestroyHeight = getgenv().FPDH
+    end
+end
+
+-- 甩飞专区UI
+local flingPlayerDropdown = flingTab:Dropdown("选择甩飞目标", getPlayerList(), function(t)
+    flingSelectedPlayer = Players:FindFirstChild(t)
+end)
+
+-- 循环刷新玩家列表
+task.spawn(function()
+    while task.wait(1) do
+        local newList = getPlayerList()
+        flingPlayerDropdown:Refresh(newList)
+    end
+end)
+
+-- 开始/停止甩飞Toggle
+flingTab:Toggle("开始甩飞指定玩家", flingActive, function(t)
+    flingActive = t
+    if flingLoopConn then
+        flingLoopConn:Disconnect()
+        flingLoopConn = nil
+    end
+    if flingActive then
+        if not flingSelectedPlayer then return end
+        flingLoopConn = RunService.Heartbeat:Connect(function()
+            if flingSelectedPlayer and flingSelectedPlayer.Character then
+                SkidFling(flingSelectedPlayer)
+                task.wait(0.5)
+            end
+        end)
+    end
+end)
+
+-- 调整面板颜色
+changeclr:Colorpicker("调整面板颜色", Color3.fromRGB(44, 120, 224), function(t)
+    lib:ChangePresetColor(Color3.fromRGB(t.R*255, t.G*255, t.B*255))
+end)
