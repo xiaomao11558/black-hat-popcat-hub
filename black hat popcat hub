@@ -6,8 +6,6 @@ local Lighting = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
 local PlayerName = LocalPlayer.Name
-
--- 全局变量
 local savedPosition = nil
 local numberedPositions = {}
 local selectedPlayer = nil
@@ -16,18 +14,20 @@ local loopTpConn = nil
 local xrayActive = false
 local xrayIgnored = {}
 local xrayColor = Color3.fromRGB(255, 255, 0)
--- 甩飞功能变量
 local flingSelectedPlayer = nil
 local flingActive = false
 local flingLoopConn = nil
 getgenv().OldPos = nil
 getgenv().FPDH = Workspace.FallenPartsDestroyHeight
-
--- 右上角时间显示
+local customNameR = 255
+local customNameG = 255
+local customNameB = 255
+local deltaStrokeR = 15
+local deltaStrokeG = 150
+local deltaStrokeB = 255
 local TimeGui = Instance.new("ScreenGui")
 TimeGui.Name = "TimeDisplayGui"
 TimeGui.Parent = LocalPlayer.PlayerGui
-
 local TimeLabel = Instance.new("TextLabel")
 TimeLabel.Name = "TimeLabel"
 TimeLabel.Parent = TimeGui
@@ -41,7 +41,6 @@ TimeLabel.TextXAlignment = Enum.TextXAlignment.Right
 TimeLabel.TextYAlignment = Enum.TextYAlignment.Top
 TimeLabel.TextStrokeTransparency = 0.5
 TimeLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
-
 local function UpdateTime()
     local CurrentTime = os.date("%H:%M:%S")
     local Weekday = os.date("%A")
@@ -56,22 +55,28 @@ local function UpdateTime()
     }
     TimeLabel.Text = string.format("%s  %s", CurrentTime, WeekdayCN[Weekday] or Weekday)
 end
-
 UpdateTime()
 RunService.Heartbeat:Connect(function()
     UpdateTime()
 end)
-
--- 主面板创建
+local function UpdateDeltaStrokeColor()
+    getgenv().Color = {deltaStrokeR, deltaStrokeG, deltaStrokeB}
+    local CoreGui = game:GetService("CoreGui")
+    for _, v in ipairs(CoreGui:GetDescendants()) do
+        if v:IsA("UIStroke") and v.Parent:IsA("ImageButton") and v.Parent.Parent:IsA("ScreenGui") and v.Parent.Parent.Parent:IsA("Folder") and v.Parent.Parent.Parent.Parent.Name == "CoreGui" then
+            v.Color = Color3.fromRGB(unpack(getgenv().Color))
+        end
+    end
+end
+UpdateDeltaStrokeColor()
 local win = lib:Window("BHP hub  你好 " .. PlayerName, Color3.fromRGB(44, 120, 224), Enum.KeyCode.RightControl)
 local mainTab = win:Tab("通用")
-local flyTab = win:Tab("飞行（fly）")
-local espTab = win:Tab("透视（esp）")
-local tpTab = win:Tab("传送（TP）")
-local flingTab = win:Tab("甩飞（fling）") -- 新增甩飞专区
-local changeclr = win:Tab("设置（set）")
-
--- 核心功能
+local flyTab = win:Tab("飞行")
+local espTab = win:Tab("透视")
+local tpTab = win:Tab("传送")
+local flingTab = win:Tab("甩飞")
+local animationTab = win:Tab("动画")
+local changeclr = win:Tab("设置")
 local speed = 16
 mainTab:Textbox("移动速度", tostring(speed), function(t)
     speed = tonumber(t) or 16
@@ -80,7 +85,6 @@ mainTab:Textbox("移动速度", tostring(speed), function(t)
         humanoid.WalkSpeed = speed
     end
 end)
-
 local jumpPower = 50
 mainTab:Textbox("跳跃高度", tostring(jumpPower), function(t)
     jumpPower = tonumber(t) or 50
@@ -89,7 +93,6 @@ mainTab:Textbox("跳跃高度", tostring(jumpPower), function(t)
         humanoid.JumpPower = jumpPower
     end
 end)
-
 local infJump = false
 mainTab:Toggle("无限跳", infJump, function(t)
     infJump = t
@@ -105,7 +108,6 @@ mainTab:Toggle("无限跳", infJump, function(t)
         end
     end)
 end)
-
 local noclip = false
 mainTab:Toggle("穿墙", noclip, function(t)
     noclip = t
@@ -124,7 +126,6 @@ mainTab:Toggle("穿墙", noclip, function(t)
     end
     task.spawn(noclipLoop)
 end)
-
 local rotateActive = false
 local rotateSpeed = 1
 local rotateConn = nil
@@ -150,7 +151,6 @@ mainTab:Toggle("启用旋转", rotateActive, function(t)
         end)
     end
 end)
-
 local brightnessActive = false
 local originalBrightness = Lighting.Brightness
 mainTab:Toggle("亮度", brightnessActive, function(t)
@@ -162,7 +162,6 @@ mainTab:Toggle("亮度", brightnessActive, function(t)
         Lighting.Brightness = originalBrightness
     end)
 end)
-
 local fogRemovalActive = false
 local originalFogEnd = Lighting.FogEnd
 local originalFogStart = Lighting.FogStart
@@ -177,7 +176,6 @@ mainTab:Toggle("除雾", fogRemovalActive, function(t)
         Lighting.FogStart = originalFogStart
     end)
 end)
-
 local customNameActive = false
 local customNameText = "自定义名称"
 local customNameGui = nil
@@ -187,6 +185,27 @@ mainTab:Textbox("自定义头顶名称", customNameText, function(t)
         if customNameGui and customNameGui:FindFirstChild("NameLabel") then
             customNameGui.NameLabel.Text = customNameText
         end
+    end
+end)
+mainTab:Textbox("名称颜色-R(0-255)", tostring(customNameR), function(t)
+    local num = tonumber(t) or 255
+    customNameR = math.clamp(num, 0, 255)
+    if customNameGui and customNameGui:FindFirstChild("NameLabel") then
+        customNameGui.NameLabel.TextColor3 = Color3.fromRGB(customNameR, customNameG, customNameB)
+    end
+end)
+mainTab:Textbox("名称颜色-G(0-255)", tostring(customNameG), function(t)
+    local num = tonumber(t) or 255
+    customNameG = math.clamp(num, 0, 255)
+    if customNameGui and customNameGui:FindFirstChild("NameLabel") then
+        customNameGui.NameLabel.TextColor3 = Color3.fromRGB(customNameR, customNameG, customNameB)
+    end
+end)
+mainTab:Textbox("名称颜色-B(0-255)", tostring(customNameB), function(t)
+    local num = tonumber(t) or 255
+    customNameB = math.clamp(num, 0, 255)
+    if customNameGui and customNameGui:FindFirstChild("NameLabel") then
+        customNameGui.NameLabel.TextColor3 = Color3.fromRGB(customNameR, customNameG, customNameB)
     end
 end)
 mainTab:Toggle("启用自定义头顶显名", customNameActive, function(t)
@@ -206,7 +225,6 @@ mainTab:Toggle("启用自定义头顶显名", customNameActive, function(t)
             customNameGui.AlwaysOnTop = true
             customNameGui.ExtentsOffset = Vector3.new(0, 2, 0)
             customNameGui.StudsOffset = Vector3.new(0, 0.5, 0)
-
             local nameLabel = Instance.new("TextLabel")
             nameLabel.Name = "NameLabel"
             nameLabel.Parent = customNameGui
@@ -214,7 +232,7 @@ mainTab:Toggle("启用自定义头顶显名", customNameActive, function(t)
             nameLabel.Size = UDim2.new(1, 0, 1, 0)
             nameLabel.Font = Enum.Font.SourceSansBold
             nameLabel.TextSize = 22
-            nameLabel.TextColor3 = Color3.new(1,1,1)
+            nameLabel.TextColor3 = Color3.fromRGB(customNameR, customNameG, customNameB)
             nameLabel.TextStrokeTransparency = 0.3
             nameLabel.TextStrokeColor3 = Color3.new(0,0,0)
             nameLabel.Text = customNameText
@@ -223,7 +241,9 @@ mainTab:Toggle("启用自定义头顶显名", customNameActive, function(t)
         end
     end
 end)
-
+mainTab:Button("启用F3x工具", function()
+    loadstring(game:GetObjects("rbxassetid://6695644299")[1].Source)()
+end)
 mainTab:Button("重置人物", function()
     if LocalPlayer.Character then
         LocalPlayer.Character:BreakJoints()
@@ -233,13 +253,10 @@ mainTab:Button("重置人物", function()
         end
     end
 end)
-
--- 飞行专区
 flyTab:Button("启用通用飞行", function()
     loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Fly-gui-v3-78856"))()
 end)
-
-flyTab:Button("启用无敌少侠飞行（仅R15有动画）", function()
+flyTab:Button("启用无敌少侠飞行", function()
     local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
     if isMobile then
         loadstring(game:HttpGet("https://raw.githubusercontent.com/396abc/Script/refs/heads/main/MobileFly.lua"))()
@@ -247,8 +264,6 @@ flyTab:Button("启用无敌少侠飞行（仅R15有动画）", function()
         loadstring(game:HttpGet("https://raw.githubusercontent.com/396abc/Script/refs/heads/main/FlyR15.lua"))()
     end
 end)
-
--- 透视专区
 local highlightPlayers = false
 local highlights = {}
 local nameTags = {}
@@ -262,13 +277,11 @@ espTab:Toggle("通用高亮", highlightPlayers, function(t)
                 local highlight = Instance.new("Highlight")
                 highlight.Parent = plr.Character
                 highlights[plr] = highlight
-
                 local nameTag = Instance.new("BillboardGui")
                 nameTag.Name = "PlayerNameTag"
                 nameTag.Parent = plr.Character.Head
                 nameTag.Size = UDim2.new(0, 200, 0, 50)
                 nameTag.AlwaysOnTop = true
-
                 local nameLabel = Instance.new("TextLabel")
                 nameLabel.Parent = nameTag
                 nameLabel.BackgroundTransparency = 1
@@ -287,13 +300,11 @@ espTab:Toggle("通用高亮", highlightPlayers, function(t)
                     local highlight = Instance.new("Highlight")
                     highlight.Parent = char
                     highlights[plr] = highlight
-
                     local nameTag = Instance.new("BillboardGui")
                     nameTag.Name = "PlayerNameTag"
                     nameTag.Parent = char.Head
                     nameTag.Size = UDim2.new(0, 200, 0, 50)
                     nameTag.AlwaysOnTop = true
-
                     local nameLabel = Instance.new("TextLabel")
                     nameLabel.Parent = nameTag
                     nameLabel.BackgroundTransparency = 1
@@ -317,7 +328,6 @@ espTab:Toggle("通用高亮", highlightPlayers, function(t)
         end
     end
 end)
-
 local function ApplyXray(obj)
     if obj:IsA("BasePart") and not xrayIgnored[obj] and obj.Parent ~= LocalPlayer.Character then
         xrayIgnored[obj] = {
@@ -328,7 +338,6 @@ local function ApplyXray(obj)
         obj.Color = xrayColor
     end
 end
-
 local function RemoveXray(obj)
     if xrayIgnored[obj] then
         obj.Transparency = xrayIgnored[obj].Transparency
@@ -336,7 +345,6 @@ local function RemoveXray(obj)
         xrayIgnored[obj] = nil
     end
 end
-
 espTab:Toggle("启用Xray", xrayActive, function(t)
     xrayActive = t
     if xrayActive then
@@ -350,8 +358,6 @@ espTab:Toggle("启用Xray", xrayActive, function(t)
         end
     end
 end)
-
--- 传送专区
 tpTab:Button("保存当前位置", function()
     local character = LocalPlayer.Character
     local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
@@ -359,7 +365,6 @@ tpTab:Button("保存当前位置", function()
         savedPosition = humanoidRootPart.CFrame
     end
 end)
-
 tpTab:Button("传送至保存位置", function()
     local character = LocalPlayer.Character
     local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
@@ -367,7 +372,6 @@ tpTab:Button("传送至保存位置", function()
         humanoidRootPart.CFrame = savedPosition
     end
 end)
-
 local saveIdText = "1"
 tpTab:Textbox("位置编号(保存)", saveIdText, function(t)
     saveIdText = t and t or "1"
@@ -379,7 +383,6 @@ tpTab:Button("编号保存位置", function()
         numberedPositions[saveIdText] = humanoidRootPart.CFrame
     end
 end)
-
 local tpIdText = "1"
 tpTab:Textbox("位置编号(传送)", tpIdText, function(t)
     tpIdText = t and t or "1"
@@ -392,7 +395,6 @@ tpTab:Button("传送至编号位置", function()
         humanoidRootPart.CFrame = targetCFrame
     end
 end)
-
 local function getPlayerList()
     local list = {}
     for _, plr in pairs(Players:GetPlayers()) do
@@ -405,14 +407,12 @@ end
 local playerDropdown = tpTab:Dropdown("选择玩家", getPlayerList(), function(t)
     selectedPlayer = Players:FindFirstChild(t)
 end)
-
 task.spawn(function()
     while task.wait(1) do
         local newList = getPlayerList()
         playerDropdown:Refresh(newList)
     end
 end)
-
 tpTab:Toggle("循环传送选中玩家", loopTpActive, function(t)
     loopTpActive = t
     if loopTpConn then
@@ -431,8 +431,6 @@ tpTab:Toggle("循环传送选中玩家", loopTpActive, function(t)
         end)
     end
 end)
-
--- 甩飞专区核心功能
 local function SkidFling(TargetPlayer)
     local Character = LocalPlayer.Character
     local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
@@ -444,13 +442,11 @@ local function SkidFling(TargetPlayer)
     local THead = TCharacter:FindFirstChild("Head")
     local Accessory = TCharacter:FindFirstChildOfClass("Accessory")
     local Handle = Accessory and Accessory:FindFirstChild("Handle")
-
     if not (Character and Humanoid and RootPart) then return end
     if RootPart.Velocity.Magnitude < 50 then
         getgenv().OldPos = RootPart.CFrame
     end
     if THumanoid and THumanoid.Sit then return end
-
     if THead then
         Workspace.CurrentCamera.CameraSubject = THead
     elseif Handle then
@@ -459,14 +455,12 @@ local function SkidFling(TargetPlayer)
         Workspace.CurrentCamera.CameraSubject = THumanoid
     end
     if not TCharacter:FindFirstChildWhichIsA("BasePart") then return end
-
     local FPos = function(BasePart, Pos, Ang)
         RootPart.CFrame = CFrame.new(BasePart.Position) * Pos * Ang
         Character:SetPrimaryPartCFrame(CFrame.new(BasePart.Position) * Pos * Ang)
         RootPart.Velocity = Vector3.new(9e7, 9e7 * 10, 9e7)
         RootPart.RotVelocity = Vector3.new(9e8, 9e8, 9e8)
     end
-
     local SFBasePart = function(BasePart)
         local TimeToWait = 2
         local Time = tick()
@@ -506,14 +500,12 @@ local function SkidFling(TargetPlayer)
             end
         until Time + TimeToWait < tick() or not flingActive
     end
-
     Workspace.FallenPartsDestroyHeight = 0/0
     local BV = Instance.new("BodyVelocity")
     BV.Parent = RootPart
     BV.Velocity = Vector3.new(0, 0, 0)
     BV.MaxForce = Vector3.new(9e9, 9e9, 9e9)
     Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
-
     if TRootPart then
         SFBasePart(TRootPart)
     elseif THead then
@@ -523,11 +515,9 @@ local function SkidFling(TargetPlayer)
     else
         return
     end
-
     BV:Destroy()
     Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
     Workspace.CurrentCamera.CameraSubject = Humanoid
-
     if getgenv().OldPos then
         repeat
             RootPart.CFrame = getgenv().OldPos * CFrame.new(0, .5, 0)
@@ -543,21 +533,15 @@ local function SkidFling(TargetPlayer)
         Workspace.FallenPartsDestroyHeight = getgenv().FPDH
     end
 end
-
--- 甩飞专区UI
 local flingPlayerDropdown = flingTab:Dropdown("选择甩飞目标", getPlayerList(), function(t)
     flingSelectedPlayer = Players:FindFirstChild(t)
 end)
-
--- 循环刷新玩家列表
 task.spawn(function()
     while task.wait(1) do
         local newList = getPlayerList()
         flingPlayerDropdown:Refresh(newList)
     end
 end)
-
--- 开始/停止甩飞Toggle
 flingTab:Toggle("开始甩飞指定玩家", flingActive, function(t)
     flingActive = t
     if flingLoopConn then
@@ -574,8 +558,37 @@ flingTab:Toggle("开始甩飞指定玩家", flingActive, function(t)
         end)
     end
 end)
-
--- 调整面板颜色
+animationTab:Button("表情Gui（仅支持R15）", function()
+    local src = ""
+    local CoreGui = game:GetService("StarterGui")
+    pcall(function() 
+        src = game:HttpGet("https://yarhm.mhi.im/scr?channel=afemmax", false)
+    end)
+    if src == "" then
+      CoreGui:SetCore("SendNotification", {
+      	Title = "YARHM Outage";
+      	Text = "YARHM Online is currently unavailable! Sorry for the inconvenience. Using YARHM Offline.";
+	      Duration = 5;
+      })
+      src = game:HttpGet("https://raw.githubusercontent.com/Joystickplays/AFEM/refs/heads/main/max/afemmax.lua", false)
+    end
+    loadstring(src)()
+end)
 changeclr:Colorpicker("调整面板颜色", Color3.fromRGB(44, 120, 224), function(t)
     lib:ChangePresetColor(Color3.fromRGB(t.R*255, t.G*255, t.B*255))
+end)
+changeclr:Textbox("Delta描边-R(0-255)", tostring(deltaStrokeR), function(t)
+    local num = tonumber(t) or 15
+    deltaStrokeR = math.clamp(num, 0, 255)
+    UpdateDeltaStrokeColor()
+end)
+changeclr:Textbox("Delta描边-G(0-255)", tostring(deltaStrokeG), function(t)
+    local num = tonumber(t) or 150
+    deltaStrokeG = math.clamp(num, 0, 255)
+    UpdateDeltaStrokeColor()
+end)
+changeclr:Textbox("Delta描边-B(0-255)", tostring(deltaStrokeB), function(t)
+    local num = tonumber(t) or 255
+    deltaStrokeB = math.clamp(num, 0, 255)
+    UpdateDeltaStrokeColor()
 end)
